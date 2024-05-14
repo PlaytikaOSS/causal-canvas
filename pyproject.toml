@@ -2,7 +2,7 @@
 name = "causal-canvas"
 version = "0.1.0"
 description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
-authors = ["Sofia Karadimitriou <sofia.m.karadimitriou@gmail.com>", "Jerome Carayol <jeromec@playtika.com>", "Armand Valsesia <armandv@playtika.com>"]
+authors = ["Sofia Karadimitriou <sofia.m.karadimitriou@gmail.com>", "Jerome Carayol <carayol_j@yahoo.fr>", "Armand Valsesia <armandv@playtika.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
