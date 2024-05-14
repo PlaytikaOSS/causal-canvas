@@ -1,0 +1,18 @@
+event_column: G3
+target_class: "[10, inf)"
+model_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/k2_prior/tree_2/bayesian_network/model_fit/bayesian_network.pkl
+conditionals:
+interventions:
+  G2:
+    low_grading:
+      0: 0.8
+      1: 0.2
+    balanced_grading:
+      0: 0.5
+      1: 0.5
+    high_grading:
+      0: 0.1
+      1: 0.9
+counterfactuals:
+  - G2
+output_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/interventions/k2_prior_tree_2/

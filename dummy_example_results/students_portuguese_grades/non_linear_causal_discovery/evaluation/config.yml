@@ -1,0 +1,62 @@
+all_models_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/
+alpha: 0.05
+boot_iterations: 2000
+data_test_input_path:
+- data/student-por_test.csv
+data_train_input_path:
+- data/student-por_train.csv
+date_column: null
+event_column:
+  name: G3
+  target_class: '[10, inf)'
+  target_column_names_cpds:
+  - '[-inf, 10)'
+  - '[10, inf)'
+  target_type: cont
+features:
+- famrel
+- freetime
+- goout
+- Dalc
+- Walc
+- health
+- absences
+- age
+- Medu
+- Fedu
+- Mjob
+- Fjob
+- traveltime
+- studytime
+- failures
+- sex
+- school
+- address
+- famsize
+- Pstatus
+- reason
+- guardian
+- schoolsup
+- famsup
+- paid
+- activities
+- nursery
+- higher
+- internet
+- romantic
+- G1
+- G2
+inference_methods:
+- k2_prior
+models_combinations:
+  tree:
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+optim_test_dates: null
+output_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/evaluation/
+score_to_optimise: f1-score
+test_dates: null
+use_multiprocessing: false

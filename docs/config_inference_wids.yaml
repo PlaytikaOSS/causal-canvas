@@ -1,0 +1,30 @@
+event_column: churn
+model_path: out/bayesian_network/model_fit/bayesian_network.pkl
+target_class: 1
+conditionals:
+  - feature: churn
+    conditional_features:
+      - [game_activity, churn]
+      - [special_event_notifications, game_activity]
+      - [tech_crashes, game_activity]
+      - [days_between_login, daily_login_rewards]
+      - [days_between_payment, game_activity]
+interventions:
+  - feature: special_event_notifications
+    low:
+      p0: 0.1
+      p1: 0.9
+    high:
+      p0: 0.9
+      p1: 0.1
+  - feature: game_activity # low and high default values are (.1, .9) and (.9, .1) respectively
+  - feature: tech_crashes
+  - feature: days_between_login
+  - feature: days_between_payment
+counterfactuals:
+  - game_activity
+  - special_event_notifications
+  - tech_crashes
+  - days_between_login
+  - days_between_payment
+output_path: ./out

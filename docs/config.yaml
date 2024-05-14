@@ -1,0 +1,134 @@
+data_input_path: data/student-por_train.csv
+structure_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/20240216_230308/causal_discovery/DAG_for_inference.dot
+id_column:
+date_column: timestamp
+event_column: G3
+features_select:
+  - famrel
+  - freetime
+  - goout
+  - Dalc
+  - Walc
+  - health
+  - absences
+  - age
+  - Medu
+  - Fedu
+  - Mjob
+  - Fjob
+  - traveltime
+  - studytime
+  - failures
+  - sex
+  - school
+  - address
+  - famsize
+  - Pstatus
+  - reason
+  - guardian
+  - schoolsup
+  - famsup
+  - paid
+  - activities
+  - nursery
+  - higher
+  - internet
+  - romantic
+  - G1
+  - G2
+drop_columns: []
+categorical_features:
+  - sex
+  - school
+  - address
+  - famsize
+  - Pstatus
+  - Mjob
+  - Fjob
+  - reason
+  - guardian
+  - failures
+  - schoolsup
+  - famsup
+  - paid
+  - activities
+  - nursery
+  - higher
+  - internet
+  - romantic
+tabu_edges:
+  - [higher, Fedu]
+  - [higher, Medu]
+  - [G2, G1]
+tabu_edge_features:
+event_graph_label: G3
+event_color: green
+higher_contribution_feature_color: yellow
+invert_signs: false
+sample_frac: 1
+h_tol: 1e-4
+max_iter: 10000
+lasso_multiplier: 0.01 # use this when connections_type: linear
+w_threshold: 0.8
+connections_type: non_linear # or linear
+non_linear_args:
+  feature_to_distribution_map:
+    "famrel": "ord"
+    "freetime": "cont"
+    "goout": "ord"
+    "Dalc": "ord"
+    "Walc": "ord"
+    "health": "ord"
+    "absences": "tweedie"
+    "age": "bimodal_pos_cont"
+    "Medu": "ord"
+    "Fedu": "ord"
+    "Mjob": "cat"
+    "Fjob": "cat"
+    "traveltime": "ord"
+    "studytime": "ord"
+    "failures": "ord"
+    "sex": "bin"
+    "school": "bin"
+    "address": "bin"
+    "famsize": "bin"
+    "Pstatus": "bin"
+    "reason": "cat"
+    "guardian": "cat"
+    "schoolsup": "bin"
+    "famsup": "bin"
+    "paid": "bin"
+    "activities": "bin"
+    "nursery": "bin"
+    "higher": "bin"
+    "internet": "bin"
+    "romantic": "bin"
+    "G1": "cont"
+    "G2": "cont"
+    "G3": "cont"
+  lasso_multiplier: 0.2
+  ridge_multiplier: 0.1
+  use_bias: true
+  hidden_layer_units: [2]
+  use_gpu: true
+  verbose: true
+discretiser:
+  method: tree
+  argument: 4
+  proportion_threshold: 0.1
+  max_categories: 1
+  discretisation_cutoffs_target: [10] # make the target binary # multinomial [10, 14, 17] # if target non-continuous, or low integer value, don't specify
+inference_method:
+  # method: MaximumLikelihoodEstimator
+  method: BayesianEstimator
+  bayes_prior: K2
+# bayes_prior: BDeu
+# equivalent_sample_size: 100
+conditional_dependency_estimates:
+  - G3
+  - G2
+  - G1
+  - higher
+create_new_folder: true
+add_datetime_to_folder: false
+output_path: dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/k2_prior/tree_4/

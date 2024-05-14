@@ -1,0 +1,51 @@
+data_input_path: data/synthetic_churn_data6.parquet
+structure_path:
+structural_model_path:
+threshold_structural_model_path:
+nonlinear_model_path:
+train_dates:
+id_column: user_id
+date_column: timestamp
+event_column: churn
+sample_frac: 0.8
+features_select:
+  - daily_login_rewards
+  - game_activity
+  - level_completion_bonuses
+  - special_event_notifications
+  - tech_crashes
+  - days_between_login
+  - days_between_payment
+categorical_features: []
+drop_columns: []
+tabu_edges:
+#  - [days_since_install, level_end]
+event_graph_label: CHURN
+event_color: red
+higher_contribution_feature_color: yellow
+invert_signs: False
+h_tol: 1e-4
+max_iter: 10000
+w_threshold: 0.0001
+lasso_multiplier: 0.0001
+discretiser:
+  method: tree
+  argument: 2
+  proportion_threshold: 0.05
+  max_categories: 3
+connections_type: linear
+non_linear_args: {}
+inference_method:
+  method: BayesianEstimator
+  bayes_prior: BDeu
+  equivalent_sample_size: 5000
+conditional_dependency_estimates:
+  - churn
+  - game_activity
+  - special_event_notifications
+  - tech_crashes
+  - days_between_login
+  - days_between_payment
+  - daily_login_rewards
+create_new_folder: False
+output_path: out

@@ -1,0 +1,77 @@
+categorical_features:
+- sex
+- school
+- address
+- famsize
+- Pstatus
+- Mjob
+- Fjob
+- reason
+- guardian
+- failures
+- schoolsup
+- famsup
+- paid
+- activities
+- nursery
+- higher
+- internet
+- romantic
+connections_type: linear
+create_new_folder: true
+data_input_path: data/student-por_train.csv
+date_column: null
+drop_columns: []
+event_color: green
+event_column: G3
+event_graph_label: G3
+features_select:
+- famrel
+- freetime
+- goout
+- Dalc
+- Walc
+- health
+- absences
+- age
+- Medu
+- Fedu
+- Mjob
+- Fjob
+- traveltime
+- studytime
+- failures
+- sex
+- school
+- address
+- famsize
+- Pstatus
+- reason
+- guardian
+- schoolsup
+- famsup
+- paid
+- activities
+- nursery
+- higher
+- internet
+- romantic
+- G1
+- G2
+h_tol: 1e-4
+higher_contribution_feature_color: yellow
+id_column: null
+invert_signs: false
+lasso_multiplier: 0.01
+max_iter: 10000
+output_path: out/students_portuguese_grades/linear_causal_discovery/
+sample_frac: 1
+tabu_edge_features: null
+tabu_edges:
+- - higher
+  - Fedu
+- - higher
+  - Medu
+- - G2
+  - G1
+w_threshold: 0.01

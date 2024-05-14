@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "causal-canvas"
+version = "0.1.0"
+description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
+authors = ["Sofia Karadimitriou <sofia.m.karadimitriou@gmail.com>", "Jerome Carayol <jeromec@playtika.com>", "Armand Valsesia <armandv@playtika.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.9, <3.11"
+causalnex = "^0.12.1"
+pydantic = "<2"
+loguru = "^0.7.2"
+fire = "^0.5.0"
+plotnine = "^0.12.4"
+seaborn = "^0.13.2"
+pydot = "^2.0.0"
+ipywidgets = "^8.1.2"
+pyarrow = "^15.0.0"
+pandas = "^1.5.3"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.2.0"
+pytest = "^8.0.0"
+pre-commit = "^3.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Also format jupyter notebooks.
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+# Enable the isort rules.
+extend-select = ["I"]

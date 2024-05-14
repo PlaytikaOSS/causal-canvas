@@ -1,0 +1,136 @@
+add_datetime_to_folder: false
+categorical_features:
+- sex
+- school
+- address
+- famsize
+- Pstatus
+- Mjob
+- Fjob
+- reason
+- guardian
+- failures
+- schoolsup
+- famsup
+- paid
+- activities
+- nursery
+- higher
+- internet
+- romantic
+conditional_dependency_estimates:
+- G3
+- G2
+- G1
+- higher
+connections_type: non_linear
+create_new_folder: true
+data_input_path: data/student-por_train.csv
+date_column: null
+discretiser:
+  argument: 3
+  discretisation_cutoffs_target:
+  - 10
+  max_categories: 1
+  method: tree
+  proportion_threshold: 0.1
+drop_columns: []
+event_color: green
+event_column: G3
+event_graph_label: G3
+features_select:
+- famrel
+- freetime
+- goout
+- Dalc
+- Walc
+- health
+- absences
+- age
+- Medu
+- Fedu
+- Mjob
+- Fjob
+- traveltime
+- studytime
+- failures
+- sex
+- school
+- address
+- famsize
+- Pstatus
+- reason
+- guardian
+- schoolsup
+- famsup
+- paid
+- activities
+- nursery
+- higher
+- internet
+- romantic
+- G1
+- G2
+h_tol: 1e-4
+higher_contribution_feature_color: yellow
+id_column: null
+inference_method:
+  bayes_prior: K2
+  method: BayesianEstimator
+invert_signs: false
+lasso_multiplier: 0.01
+max_iter: 10000
+non_linear_args:
+  feature_to_distribution_map:
+    Dalc: ord
+    Fedu: ord
+    Fjob: cat
+    G1: cont
+    G2: cont
+    G3: cont
+    Medu: ord
+    Mjob: cat
+    Pstatus: bin
+    Walc: ord
+    absences: tweedie
+    activities: bin
+    address: bin
+    age: bimodal_pos_cont
+    failures: ord
+    famrel: ord
+    famsize: bin
+    famsup: bin
+    freetime: cont
+    goout: ord
+    guardian: cat
+    health: ord
+    higher: bin
+    internet: bin
+    nursery: bin
+    paid: bin
+    reason: cat
+    romantic: bin
+    school: bin
+    schoolsup: bin
+    sex: bin
+    studytime: ord
+    traveltime: ord
+  hidden_layer_units:
+  - 2
+  lasso_multiplier: 0.2
+  ridge_multiplier: 0.1
+  use_bias: true
+  use_gpu: true
+  verbose: true
+output_path: out/students_portuguese_grades/non_linear_causal_discovery/k2_prior/tree_3/
+sample_frac: 1
+structure_path: out/students_portuguese_grades/non_linear_causal_discovery/20240215_220643/causal_discovery/DAG_for_inference.dot
+tabu_edge_features: null
+tabu_edges:
+- - higher
+  - Fedu
+- - higher
+  - Medu
+- - G2
+  - G1
+w_threshold: 0.8

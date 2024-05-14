@@ -1,0 +1,15 @@
+conditionals: null
+counterfactuals:
+- G2
+event_column: G3
+interventions:
+  G2:
+    high_grading:
+      0: 0.2
+      1: 0.8
+    low_grading:
+      0: 0.8
+      1: 0.2
+model_path: out/students_portuguese_grades/non_linear_causal_discovery/k2_prior/tree_2/bayesian_network/model_fit/bayesian_network.pkl
+output_path: out/students_portuguese_grades/non_linear_causal_discovery/interventions/k2_prior_tree_2/
+target_class: '[10, inf)'
