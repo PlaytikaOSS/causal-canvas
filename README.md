@@ -18,13 +18,13 @@ The pipeline reads a YAML config and:
 
 For the conceptual background — causal discovery, Bayesian networks, do-calculus interventions and counterfactuals — see the in-tree documentation:
 
-- [Introduction](docs/concepts/introduction.md) — methodology overview.
-- [Linear causal discovery](docs/concepts/linear-causal-discovery.md) — NOTEARS and SEMs.
-- [Non-linear causal discovery (deep dive)](docs/for-statisticians/nonlinear-causal-discovery-deep-dive.md) — NOTEARS-MLP and distribution types.
-- [Bayesian networks](docs/concepts/bayesian-networks.md) and [estimation deep dive](docs/concepts/bayesian-networks-estimation.md).
-- [Interventions and counterfactuals](docs/concepts/interventions-counterfactuals.md) and [deep dive](docs/concepts/interventions-counterfactuals-deep-dive.md).
+- [Introduction](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/introduction.md) — methodology overview.
+- [Linear causal discovery](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/linear-causal-discovery.md) — NOTEARS and SEMs.
+- [Non-linear causal discovery (deep dive)](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/for-statisticians/nonlinear-causal-discovery-deep-dive.md) — NOTEARS-MLP and distribution types.
+- [Bayesian networks](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/bayesian-networks.md) and [estimation deep dive](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/bayesian-networks-estimation.md).
+- [Interventions and counterfactuals](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/interventions-counterfactuals.md) and [deep dive](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/interventions-counterfactuals-deep-dive.md).
 
-The vendored NOTEARS code originates from [`causalnex`](https://causalnex.readthedocs.io/en/latest/index.html#) (Apache-2.0, archived upstream). Bayesian-network fitting and inference are provided by [`pgmpy`](https://pgmpy.org); optional causal-effect estimation by [`DoWhy`](https://www.pywhy.org/dowhy/) (`pip install causal-canvas[dowhy]`). See [ADR-0001](docs/adr/0001-causalnex-migration.md).
+The vendored NOTEARS code originates from [`causalnex`](https://causalnex.readthedocs.io/en/latest/index.html#) (Apache-2.0, archived upstream). Bayesian-network fitting and inference are provided by [`pgmpy`](https://pgmpy.org); optional causal-effect estimation by [`DoWhy`](https://www.pywhy.org/dowhy/) (`pip install causal-canvas[dowhy]`). See [ADR-0001](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/adr/0001-causalnex-migration.md).
 
 ## Code structure
 
@@ -199,19 +199,19 @@ Known CVEs in the dependency tree are scanned with [pip-audit](https://github.co
 tox -e audit
 ```
 
-Findings are **non-blocking** today: the `causalnex` pin chain (`torch==2.2.1`, `pyarrow==15.0.0`) was removed in 0.2.0, so remaining advisories are in dev tooling. See [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) for the current triage, the upgrade blockers, and the process for new findings.
+Findings are **non-blocking** today: the `causalnex` pin chain (`torch==2.2.1`, `pyarrow==15.0.0`) was removed in 0.2.0, so remaining advisories are in dev tooling. See [`docs/SECURITY_AUDIT.md`](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/SECURITY_AUDIT.md) for the current triage, the upgrade blockers, and the process for new findings.
 
 ### Reporting a vulnerability
 
-Please contact the maintainers privately rather than opening a public issue. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for reporting guidance.
+Please contact the maintainers privately rather than opening a public issue. See [`CONTRIBUTING.md`](https://github.com/PlaytikaOSS/causal-canvas/blob/main/CONTRIBUTING.md) for reporting guidance.
 
 ## Causal Discovery and Bayesian Network Fitting
 
 ### Configuration
 
-The full configuration schema for `infer-bn` (data and I/O, causal-discovery hyperparameters, non-linear NOTEARS arguments, discretisation, Bayesian-network inference, visualisation) is documented in [docs/reference/config.md](docs/reference/config.md), grouped by pipeline stage with one table per group.
+The full configuration schema for `infer-bn` (data and I/O, causal-discovery hyperparameters, non-linear NOTEARS arguments, discretisation, Bayesian-network inference, visualisation) is documented in [docs/reference/config.md](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/reference/config.md), grouped by pipeline stage with one table per group.
 
-A bundled example lives at [`examples/students/config.yaml`](examples/students/config.yaml). Each example folder under `examples/` ships a `README.md` describing the scenario and the commands to reproduce its outputs.
+A bundled example lives at [`examples/students/config.yaml`](https://github.com/PlaytikaOSS/causal-canvas/blob/main/examples/students/config.yaml). Each example folder under `examples/` ships a `README.md` describing the scenario and the commands to reproduce its outputs.
 
 ### Experiment results
 
@@ -274,7 +274,7 @@ the optimized threshold obtained from the optimization set.
 These predictions are also stored in CSV files. Like before, there's a CSV file and a plot with bootstrap estimated
 scores for all models, allowing you to assess model performance on the test set.
 
-The full schema for `evaluate-experiments` is documented in [docs/reference/config.md](docs/reference/config.md#evaluate-experiments-configuration). A bundled example lives at [`examples/students/config_evaluation.yaml`](examples/students/config_evaluation.yaml).
+The full schema for `evaluate-experiments` is documented in [docs/reference/config.md](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/reference/config.md#evaluate-experiments-configuration). A bundled example lives at [`examples/students/config_evaluation.yaml`](https://github.com/PlaytikaOSS/causal-canvas/blob/main/examples/students/config_evaluation.yaml).
 
 ### Error Analysis Usage
 
@@ -319,9 +319,9 @@ Error analysis results
 
 ## Do-why inference tool
 
-The `infer-dowhy` console script performs do-calculus Bayesian-network inference against a fitted model: marginals, interventions, counterfactuals, and ATE. The full schema for `config_inference.yaml` is documented in [docs/reference/config.md](docs/reference/config.md#infer-dowhy-configuration). A bundled example lives at [`examples/students/config_inference.yaml`](examples/students/config_inference.yaml).
+The `infer-dowhy` console script performs do-calculus Bayesian-network inference against a fitted model: marginals, interventions, counterfactuals, and ATE. The full schema for `config_inference.yaml` is documented in [docs/reference/config.md](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/reference/config.md#infer-dowhy-configuration). A bundled example lives at [`examples/students/config_inference.yaml`](https://github.com/PlaytikaOSS/causal-canvas/blob/main/examples/students/config_inference.yaml).
 
-For the conceptual difference between observational, interventional, and counterfactual queries, see [docs/concepts/interventions-counterfactuals.md](docs/concepts/interventions-counterfactuals.md).
+For the conceptual difference between observational, interventional, and counterfactual queries, see [docs/concepts/interventions-counterfactuals.md](https://github.com/PlaytikaOSS/causal-canvas/blob/main/docs/concepts/interventions-counterfactuals.md).
 
 ```bash
 poetry run infer-dowhy --config_file examples/students/config_inference.yaml

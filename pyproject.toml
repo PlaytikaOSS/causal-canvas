@@ -1,6 +1,6 @@
 [project]
 name = "causal-canvas"
-version = "0.2.0"
+version = "0.2.1"
 description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
 readme = "README.md"
 requires-python = ">=3.10, <3.13"
@@ -9,6 +9,19 @@ authors = [
     {name = "Jerome Carayol", email = "carayol_j@yahoo.fr"},
     {name = "Stefano Piazza", email = "to.stefano.piazza@gmail.com"},
     {name = "Armand Valsesia", email = "armandv@playtika.com"},
+]
+license = {text = "MIT"}
+keywords = ["causal discovery", "causal inference", "NOTEARS", "Bayesian network", "do-calculus", "structure learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     # Bayesian-network + inference layer (replaces the abandoned causalnex; ADR-0001).
@@ -40,6 +53,13 @@ dowhy = ["dowhy>=0.14,<0.15"]
 # `discretiser_method: mdlp` (carried over from causalnex's optional extra).
 mdlp = ["mdlp-discretization>=0.3.3,<0.4.0"]
 
+[project.urls]
+Homepage = "https://github.com/PlaytikaOSS/causal-canvas"
+Source = "https://github.com/PlaytikaOSS/causal-canvas"
+Documentation = "https://github.com/PlaytikaOSS/causal-canvas/tree/main/docs"
+Changelog = "https://github.com/PlaytikaOSS/causal-canvas/blob/main/CHANGELOG.md"
+Issues = "https://github.com/PlaytikaOSS/causal-canvas/issues"
+
 [project.scripts]
 infer-bn = "infer_bayesian_network:main"
 infer-dowhy = "infer_do_why:main"
@@ -52,7 +72,7 @@ iterate-structure-learning = "iterate_structure_learning:main"
 # duplicated here to keep both Poetry versions working; Poetry 2 reads
 # [project] first and ignores the [tool.poetry] copies.
 name = "causal-canvas"
-version = "0.2.0"
+version = "0.2.1"
 description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
 authors = ["Sofia Karadimitriou <sofia.m.karadimitriou@gmail.com>", "Jerome Carayol <carayol_j@yahoo.fr>", "Stefano Piazza <to.stefano.piazza@gmail.com>", "Armand Valsesia <armandv@playtika.com>"]
 # wheel content: PEP 621 has no equivalent for including single-file
