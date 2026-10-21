@@ -1,14 +1,13 @@
 import json
-import pickle
 from datetime import datetime
 
 import fire
 import pandas as pd
 import yaml
-from causalnex.inference import InferenceEngine
 from loguru import logger
 
 from causal_canvas.bayesian_network_estimator import BayesianNetworkEstimator
+from causal_canvas.inference_engine import InferenceEngine
 from causal_canvas.inference_utils import (
     compute_counterfactuals,
     compute_effect,
@@ -23,9 +22,10 @@ from causal_canvas.inference_utils import (
     plot_uplifts,
 )
 from causal_canvas.script_config import ScriptConfigInference
+from causal_canvas.utils import safe_pickle_load
 
 
-def infer(config_file: str):
+def infer(config_file: str, debug: bool = False):
     """
     Perform inference based on the provided configuration file.
 
@@ -33,17 +33,26 @@ def infer(config_file: str):
     ----------
     config_file : str
         Path to the configuration file for the inference.
+    debug : bool
+        If True, log the full config on startup. Defaults to False, which
+        logs only identifying fields.
     """
     # Step 1: Read and load the configuration from the YAML file
     logger.info("Config read")
 
     config = ScriptConfigInference.load_yaml(config_file)
-    logger.info(config)
+    if debug:
+        logger.info(f"Full config: {config}")
+    else:
+        logger.info(
+            f"Config: event={config.event_column} "
+            f"model={config.model_path.name} "
+            f"output={config.output_path}"
+        )
 
     # Step 2: Load the Bayesian Network model for inference
     logger.info("Reading Bayesian Network for inference")
-    with config.model_path.open("rb") as fp:
-        model: BayesianNetworkEstimator = pickle.load(fp)
+    model: BayesianNetworkEstimator = safe_pickle_load(config.model_path)
 
     if model.model is None:
         raise ValueError(
@@ -171,7 +180,7 @@ def infer(config_file: str):
             counterfactuals=True,
         )
 
-        marginals_updated = ie.query(parallel=True)
+        marginals_updated = ie.query()
         marginals_updated_mapped_dictionary = map_splits(model, marginals_updated)
 
         ates = compute_effect(
@@ -211,8 +220,12 @@ def infer(config_file: str):
     # Step 8: Write the final configuration to a YAML file
     logger.info("Writing config file")
     with (output_path / "config.yml").open("w") as outfile:
-        yaml.dump(dict(config), outfile)
+        yaml.dump(config.model_dump(), outfile)
+
+
+def main():
+    fire.Fire(infer)
 
 
 if __name__ == "__main__":
-    fire.Fire(infer)
+    main()

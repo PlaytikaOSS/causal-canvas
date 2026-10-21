@@ -1,21 +1,60 @@
+"""
+Categorical distribution type for non-linear NOTEARS.
+
+Defines :class:`DistTypeCategorical`, an implementation of the
+``causalnex`` ``DistTypeBase`` interface that produces softmax-style
+outputs and a one-hot loss for categorical-coded features used by the
+MLP NOTEARS solver.
+
+**Layer**: low-level. Plugged into the solver via
+``dist_type_aliases["cat"]`` in the package ``__init__``.
+
+**Relationship to causalnex**: subclasses
+``causal_canvas.vendored.dist_type._base.DistTypeBase`` and uses
+the upstream ``ExpandColumnsMixin`` for one-hot column expansion;
+designed to compose with the rest of the upstream ``DistType*``
+hierarchy.
+
+See also
+--------
+:mod:`causal_canvas.custom_notears_mlp` — consumer of this dist type.
+:mod:`causal_canvas.custom_distributions` — the dist-type registry.
+"""
+
 from copy import deepcopy
-from typing import Dict, List, Tuple
+from typing import Optional
 
 import numpy as np
 import torch
-from causalnex.structure.pytorch.dist_type._base import DistTypeBase, ExpandColumnsMixin
-from causalnex.structure.structuremodel import StructureModel
 from sklearn.preprocessing import OneHotEncoder
 from torch import nn
+
+from causal_canvas.vendored.dist_type._base import DistTypeBase, ExpandColumnsMixin
+from causal_canvas.vendored.structure_model import StructureModel
 
 
 class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
     """Class defining categorical distribution type functionality"""
 
-    # index group of categorical columns
-    idx_group = None
-    # column expander for later preprocessing
-    encoder = None
+    # index group of categorical columns; populated during preprocess_X(fit_transform=True)
+    idx_group: Optional[list[int]] = None
+    # column expander for later preprocessing; populated during preprocess_X(fit_transform=True)
+    encoder: Optional[OneHotEncoder] = None
+
+    def _require_idx_group(self) -> list[int]:
+        """Return a non-None idx_group or raise.
+
+        Most methods on this class only make sense after preprocess_X has been
+        called with ``fit_transform=True`` (which populates ``self.idx_group``).
+        Using this helper at the top of each read-site gives a clear runtime
+        error instead of a cryptic ``TypeError`` when idx_group is still None.
+        """
+        if self.idx_group is None:
+            raise RuntimeError(
+                "idx_group not initialized; first call preprocess_X with "
+                "fit_transform=True before using this method"
+            )
+        return self.idx_group
 
     def get_columns(
         self,
@@ -30,7 +69,7 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             1d or 2d np.ndarray of columns.
         """
-        return X[:, self.idx_group]
+        return X[:, self._require_idx_group()]
 
     def preprocess_X(self, X: np.ndarray, fit_transform: bool = True) -> np.ndarray:
         """
@@ -59,12 +98,15 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
 
         # fit the OneHotEncoder
         if fit_transform:
-            self.encoder = OneHotEncoder(
-                sparse_output=False, categories="auto", drop=None
-            )
+            self.encoder = OneHotEncoder(sparse_output=False, categories="auto", drop=None)
             self.encoder.fit(X[:, [self.idx]])
 
         # expand columns for this feature
+        if self.encoder is None:
+            raise RuntimeError(
+                "encoder not initialized; first call preprocess_X with "
+                "fit_transform=True before calling with fit_transform=False"
+            )
         expanded_columns = self.encoder.transform(X[:, [self.idx]])
         # update the original column with the first expanded column
         X[:, self.idx] = expanded_columns[:, 0]
@@ -84,9 +126,7 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
 
         return X
 
-    def preprocess_tabu_edges(
-        self, tabu_edges: List[Tuple[int, int]]
-    ) -> List[Tuple[int, int]]:
+    def preprocess_tabu_edges(self, tabu_edges: list[tuple[int, int]]) -> list[tuple[int, int]]:
         """
         Update tabu_edges taking into account expanded columns.
 
@@ -97,10 +137,12 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
             Preprocessed tabu_edges.
         """
         return self.update_tabu_edges(
-            idx_group=self.idx_group, tabu_edges=tabu_edges, tabu_idx_group=True
+            idx_group=self._require_idx_group(),
+            tabu_edges=tabu_edges,
+            tabu_idx_group=True,
         )
 
-    def preprocess_tabu_nodes(self, tabu_nodes: List[int]) -> List[int]:
+    def preprocess_tabu_nodes(self, tabu_nodes: list[int]) -> list[int]:
         """
         Update tabu_nodes taking into account expanded columns.
 
@@ -110,7 +152,7 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             Preprocessed tabu_nodes.
         """
-        return self.update_tabu_nodes(idx_group=self.idx_group, tabu_nodes=tabu_nodes)
+        return self.update_tabu_nodes(idx_group=self._require_idx_group(), tabu_nodes=tabu_nodes)
 
     def modify_h(self, square_weight_mat: torch.Tensor) -> torch.Tensor:
         """
@@ -127,8 +169,9 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             The modified W matrix.
         """
-        orig_idx = self.idx_group[0]
-        expand_idx = self.idx_group[1:]
+        idx_group = self._require_idx_group()
+        orig_idx = idx_group[0]
+        expand_idx = idx_group[1:]
 
         # Add on the edges from expanded nodes.
         square_weight_mat[orig_idx, :] = square_weight_mat[orig_idx, :] + torch.sum(
@@ -152,8 +195,9 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             Updated adjacency matrix.
         """
-        orig_idx = self.idx_group[0]
-        expand_idx = self.idx_group[1:]
+        idx_group = self._require_idx_group()
+        orig_idx = idx_group[0]
+        expand_idx = idx_group[1:]
 
         # Add on the edges from expanded nodes.
         adj[orig_idx, :] = adj[orig_idx, :] + np.sum(adj[expand_idx, :], axis=0)
@@ -187,7 +231,7 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             Updated StructureModel
         """
-        for idx in self.idx_group:
+        for idx in self._require_idx_group():
             sm.nodes[idx]["dist_type"] = self
         return sm
 
@@ -210,9 +254,10 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
             Scalar pytorch tensor of the reconstruction loss between X and X_hat.
         """
 
+        idx_group = self._require_idx_group()
         return nn.functional.cross_entropy(
-            input=X_hat[:, self.idx_group],
-            target=self._to_index(X[:, self.idx_group]),
+            input=X_hat[:, idx_group],
+            target=self._to_index(X[:, idx_group]),
             reduction="mean",
         )
 
@@ -228,7 +273,8 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
             MUST be same shape as passed in data.
             Projects the self.idx column from the latent space to the dist_type space.
         """
-        X_hat[:, self.idx_group] = torch.softmax(X_hat[:, self.idx_group], dim=1)
+        idx_group = self._require_idx_group()
+        X_hat[:, idx_group] = torch.softmax(X_hat[:, idx_group], dim=1)
         return X_hat
 
     @staticmethod
@@ -250,7 +296,7 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
             return f"{colname}{catidx}"
         return colname
 
-    def update_idx_col(self, idx_col: Dict[int, str]) -> Dict[int, str]:
+    def update_idx_col(self, idx_col: dict[int, str]) -> dict[int, str]:
         """
         Expand the named columns to include category names.
 
@@ -260,8 +306,9 @@ class DistTypeCategorical(ExpandColumnsMixin, DistTypeBase):
         Returns:
             Updated index to column mapping.
         """
+        idx_group = self._require_idx_group()
         new_idx_cols = {}
-        colname = idx_col.pop(self.idx_group[0])
-        for catidx, idx in enumerate(self.idx_group):
+        colname = idx_col.pop(idx_group[0])
+        for catidx, idx in enumerate(idx_group):
             new_idx_cols[idx] = self.make_node_name(colname, catidx)
         return {**idx_col, **new_idx_cols}

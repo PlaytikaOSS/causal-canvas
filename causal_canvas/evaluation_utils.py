@@ -1,16 +1,37 @@
+"""
+Bayesian-network error analysis and threshold selection.
+
+Bootstrap-based F1 / precision / recall scoring helpers used to compare
+multiple model combinations (different DAGs, discretisers, inference
+methods). Provides per-feature threshold optimisation on an ``optim``
+split and final scoring on a held-out ``test`` split, plus plotting
+helpers for diagnostic figures.
+
+**Layer**: low-level helpers. Consumed by the ``evaluate_experiments.py``
+script; not part of the curated top-level public API.
+
+See also
+--------
+:mod:`causal_canvas.bayesian_network_estimator` — produces the fitted
+    networks scored here.
+``evaluate_experiments.py`` — top-level script that orchestrates these
+    helpers across experiment combinations.
+"""
+
 import json
 import multiprocessing as mp
 import os
-import pickle
 from multiprocessing import Pool
-from typing import Any, Dict, List
+from typing import Annotated, Any, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from loguru import logger
-from pydantic import confloat, conint
+from pydantic import Field
 from sklearn.metrics import classification_report
+
+from causal_canvas.utils import safe_pickle_load
 
 
 def plot_style(figsize=(12, 6), labelsize=20, titlesize=24, ticklabelsize=14, **kwargs):
@@ -53,10 +74,10 @@ def plot_conditionals(
     cpds_path: str,
     target_column_names: str,
     target_class: str,
-    threshold: confloat(ge=0, le=1),
+    threshold: Annotated[float, Field(ge=0, le=1)],
     inference_method: tuple,
     target: str,
-    path: str = None,
+    path: Optional[str] = None,
     sub_path: str = "",
 ):
     """
@@ -88,14 +109,17 @@ def plot_conditionals(
     - The function uses matplotlib for plotting.
     """
     # Produce CPD plots
-    cpds = pd.read_csv(cpds_path).drop("", axis=1)
+    cpds = pd.read_csv(cpds_path)
+    # The first column is the unnamed row index written by ``get_node_cpds``;
+    # pandas names it "Unnamed: 0" (or "" depending on version).
+    cpds = cpds.drop(columns=cpds.columns[0])
     feats = [c for c in cpds.columns if c not in target_column_names]
 
     n_rows = 2
     n_cols = int(len(feats) / 2 if len(feats) % 2 == 0 else round(len(feats) / 2) + 1)
     fig, axs = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(20, 15), sharey=True)
 
-    for col, ax in zip(feats, axs.ravel()):
+    for col, ax in zip(feats, axs.ravel(), strict=False):
         if cpds[col].dtype != "int64":
             cpds["order_val"] = (
                 cpds[col]
@@ -138,9 +162,7 @@ def plot_conditionals(
             ax.set_ylabel(f"P({target}|{col}=i, X)")
             ax.axhline(threshold, color="black")
             ax.set_title(col, {"fontsize": 10})
-    fig.suptitle(
-        f"CPDs of one feature | model {inference_method[0]} with {inference_method[1]}"
-    )
+    fig.suptitle(f"CPDs of one feature | model {inference_method[0]} with {inference_method[1]}")
     fig.tight_layout()
     fig.show()
     if path:
@@ -173,9 +195,9 @@ def map_splits(model: Any, df: pd.DataFrame) -> pd.DataFrame:
 def extract_all_models(
     all_models_path: str,
     model_path: str,
-    inference_methods: List,
-    models_combinations: Dict,
-) -> [List, List]:
+    inference_methods: list,
+    models_combinations: dict,
+) -> tuple[list, list]:
     models_list = []
     model_names_list = []
 
@@ -184,10 +206,9 @@ def extract_all_models(
         for k, v in models_combinations.items():
             for val in v:
                 try:
-                    file = open(path + f"{k}_{val}" + model_path, "rb")
+                    loaded_model = safe_pickle_load(path + f"{k}_{val}" + model_path)
                     model_names_list.append((method, f"{k}_{val}"))
-                    models_list.append(pickle.load(file))
-                    pass
+                    models_list.append(loaded_model)
                 except FileNotFoundError:
                     logger.info(
                         f"Bayesian Network file does not exist for {k}, {val}. Skipping this iteration."
@@ -199,13 +220,13 @@ def extract_all_models(
 def predict_samples(
     df: pd.DataFrame,
     model: Any,
-    feats: List[str],
+    feats: list[str],
     target_name: str,
     target_class: str,
     target_column_names_cpds: list,
     discretisation_method: str,
     discretisation_path: str,
-) -> [pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Run Bayesian network inference on a subset of data and extract user-level predictions.
 
@@ -234,20 +255,16 @@ def predict_samples(
 
     """
 
-    disc = (
-        feats + [target_name] if target_name in model.split_dictionary.keys() else feats
-    )
+    disc = feats + [target_name] if target_name in model.split_dictionary.keys() else feats
 
     if discretisation_method in ["tree", "mdlp"] and not model.proportion_threshold:
         new_df = model.discretiser.transform(df[feats])
         splitter_path = discretisation_path
     elif discretisation_method in ["tree", "mdlp"] and model.proportion_threshold:
-        new_df = model._known_splits_discretise(
-            x=df[disc], splits=model.condenced_thresholds
-        )
+        new_df = model._known_splits_discretise(x=df[disc], splits=model.condensed_thresholds)
         splitter_path = None
     else:
-        with open(discretisation_path, "r") as f:
+        with open(discretisation_path) as f:
             splits = json.load(f)
         splitter_path = discretisation_path
         new_df = model._known_splits_discretise(x=df[disc], splits=splits)
@@ -274,7 +291,7 @@ def predict_samples(
 def process_predictions(
     df: pd.DataFrame,
     model: Any,
-    feats: List[str],
+    feats: list[str],
     target_name: str,
     target_class: str,
     target_column_names_cpds: list,
@@ -320,9 +337,9 @@ def process_predictions(
 
 def extract_predictions(
     df: pd.DataFrame,
-    chunk_size: conint(ge=1),
+    chunk_size: Annotated[int, Field(ge=1)],
     model: Any,
-    features: List[str],
+    features: list[str],
     model_name: str,
     folder_name: str,
     target_name: str,
@@ -381,8 +398,8 @@ def extract_predictions(
             )
             async_results.append(async_result)
 
-        results = [async_result.get() for async_result in async_results]
-        concatenated_results = pd.concat(results)
+        chunk_results = [async_result.get() for async_result in async_results]
+        concatenated_results = pd.concat(chunk_results)
         # Save predictions by model index
 
         concatenated_results.to_csv(
@@ -403,15 +420,13 @@ def extract_predictions(
             discretisation_method,
             discretisation_path,
         )
-        results.to_csv(
-            f"{folder_name}/{model_name[0]}/predictions_model_{model_name[1]}.csv"
-        )
+        results.to_csv(f"{folder_name}/{model_name[0]}/predictions_model_{model_name[1]}.csv")
         return results
 
 
 def get_best_threshold(
     predictions: pd.DataFrame, target_name: str, target_class: str, score: str
-) -> [Dict, Dict, float]:
+) -> tuple[dict, dict, float]:
     """
     Calculates threshold with best f1 score for a
     set of predictions.
@@ -443,7 +458,13 @@ def get_best_threshold(
         if threshold == 0.5:
             score_050 = score_by_threshold[threshold]
 
-    max_value["best_threshold"] = max(score_by_threshold, key=score_by_threshold.get)
+    # Use an indexing lambda rather than `dict.get` directly: `.get`'s
+    # return type is Optional[V], which mypy refuses as a `max` key; but
+    # since we iterate over the keys that are actually present, indexing
+    # is guaranteed non-None.
+    max_value["best_threshold"] = max(
+        score_by_threshold, key=lambda k: score_by_threshold[k]
+    )
     max_value["value"] = score_by_threshold[max_value["best_threshold"]]
 
     return score_by_threshold, max_value, score_050
@@ -451,11 +472,11 @@ def get_best_threshold(
 
 def calculate_score(
     predictions: pd.DataFrame,
-    threshold: confloat(ge=0, le=1),
+    threshold: Annotated[float, Field(ge=0, le=1)],
     target_name: str,
     target_class: str,
     score: str,
-) -> Dict:
+) -> dict:
     """
     Calculates a score of minority class given a threshold.
 
@@ -565,6 +586,7 @@ def plot_bootstrapped_scores(scores, path):
                 score_df["50%"],
                 score_df["97.5%"],
                 range(len(score_df)),
+                strict=False,
             ):
                 plt.plot((lower, mean, upper), (y, y, y), "ro-", color="tab:blue")
             plt.yticks(range(len(score_df)), list(score_df["model"]))

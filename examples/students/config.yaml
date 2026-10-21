@@ -117,7 +117,7 @@ discretiser:
   argument: 4
   proportion_threshold: 0.1
   max_categories: 1
-  discretisation_cutoffs_target: [10] # make the target binary # multinomial [10, 14, 17] # if target non-continuous, or low integer value, don't specify
+  cutoffs_target: [10] # make the target binary # multinomial [10, 14, 17] # if target non-continuous, or low integer value, don't specify
 inference_method:
   # method: MaximumLikelihoodEstimator
   method: BayesianEstimator

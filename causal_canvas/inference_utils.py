@@ -1,3 +1,29 @@
+"""
+Do-calculus and counterfactual helpers.
+
+Free-function helpers used by the ``infer-bn`` /
+``infer_do_why.py`` entry point to compute marginals, apply
+``do``-interventions, derive counterfactual distributions, and
+estimate the average treatment effect (ATE) from a fitted
+Bayesian network.
+
+**Layer**: low-level helpers. Consumed by the script-level orchestration
+in ``infer_do_why.py``; not part of the curated top-level public API.
+
+**Relationship to pgmpy**: operates on a fitted
+:class:`causal_canvas.inference_engine.InferenceEngine` (pgmpy variable
+elimination). Marginals come from
+``InferenceEngine.query``; interventions are applied with
+``InferenceEngine.do_intervention``; counterfactuals and ATE are
+computed by composing those primitives over the supplied evidence.
+
+See also
+--------
+:mod:`causal_canvas.bayesian_network_estimator` — produces the fitted
+    network and ``InferenceEngine`` consumed here.
+``infer_do_why.py`` — top-level script that orchestrates these helpers.
+"""
+
 from itertools import product
 from pathlib import Path
 from typing import Union
@@ -6,7 +32,6 @@ import numpy as np
 import pandas as pd
 import plotnine.ggplot as ggplot
 import seaborn as sns
-from causalnex.inference import InferenceEngine
 from loguru import logger
 from matplotlib import pyplot as plt
 from pandas.api.types import CategoricalDtype
@@ -25,6 +50,7 @@ from plotnine import (
 from scipy.stats import norm
 
 from causal_canvas.bayesian_network_estimator import BayesianNetworkEstimator
+from causal_canvas.inference_engine import InferenceEngine
 from causal_canvas.script_config import Conditional, Intervention
 
 
@@ -119,7 +145,7 @@ def query_marginals(inference_engine, conditions, target):
     -------
         dict
     """
-    return inference_engine.query(conditions, parallel=True)[target]
+    return inference_engine.query(conditions, nodes=[target])[target]
 
 
 def get_all_combinations(
@@ -171,10 +197,8 @@ def get_all_combinations(
             )
             for conditions in c.conditional_features
             for conditions_dict in (
-                dict(zip(conditions, combination))
-                for combination in product(
-                    *(marginals[cond_key].keys() for cond_key in conditions)
-                )
+                dict(zip(conditions, combination, strict=False))
+                for combination in product(*(marginals[cond_key].keys() for cond_key in conditions))
             )
         }
         for c in cond_marginals
@@ -201,9 +225,7 @@ def map_tupled_values_to_actual(mapping, data):
     """
 
     def map_tuple_key(tuple_key):
-        return tuple(
-            (key, mapping.get(key, {}).get(value, value)) for key, value in tuple_key
-        )
+        return tuple((key, mapping.get(key, {}).get(value, value)) for key, value in tuple_key)
 
     return {
         key: {
@@ -271,9 +293,9 @@ def compute_counterfactuals(inference_engine, model, feature, target):
     """
 
     dfs = []
-    no_intervention = pd.Series(inference_engine.query()[target]).rename("control")
+    no_intervention = pd.Series(inference_engine.query(nodes=[target])[target]).rename("control")
     dfs.append(no_intervention)
-    levels = inference_engine.query(parallel=True)[feature]
+    levels = inference_engine.query(nodes=[feature])[feature]
     if feature in model.split_dictionary.keys():
         feature_mapping = model._get_single_feature_map(feature=feature)
         feature_mapping["control"] = "control"
@@ -281,7 +303,7 @@ def compute_counterfactuals(inference_engine, model, feature, target):
     for key, _ in levels.items():
         new_level_vals = {k: 1 if k == key else 0 for k in levels}
         inference_engine.do_intervention(feature, new_level_vals)
-        dfs.append(pd.Series(inference_engine.query()[target]))
+        dfs.append(pd.Series(inference_engine.query(nodes=[target])[target]))
 
     cf = pd.concat(dfs, axis=1)
     if feature in model.split_dictionary.keys():
@@ -321,20 +343,18 @@ def compute_shift_of_probas(
     """
 
     dfs = []
-    no_intervention = pd.Series(inference_engine.query()[target]).rename("control")
+    no_intervention = pd.Series(inference_engine.query(nodes=[target])[target]).rename("control")
     dfs.append(no_intervention)
     labels = ["low", "high"]
     for label in labels:
         logger.info(f"{intervention.feature}, {label}, {getattr(intervention, label)}")
         inference_engine.do_intervention(
-            intervention.feature, getattr(intervention, label).dict()
+            intervention.feature, getattr(intervention, label).to_state_map()
         )
-        dfs.append(pd.Series(inference_engine.query(parallel=True)[target]))
+        dfs.append(pd.Series(inference_engine.query(nodes=[target])[target]))
 
     shifts = pd.concat(dfs, axis=1)
-    shifts.columns = ["control"] + [
-        f"{intervention.feature}_{label}" for label in list(labels)
-    ]
+    shifts.columns = ["control"] + [f"{intervention.feature}_{label}" for label in list(labels)]
     if target in model.split_dictionary.keys():
         shifts.rename(model._get_single_feature_map(feature=target), inplace=True)
     return shifts
@@ -375,9 +395,7 @@ def plot_counterfactuals_or_shifts(
         plt.title(f"Distribution of {target_name} by counterfactuals of {feature_name}")
         path_save = "counterfactuals"
     else:
-        plt.title(
-            f"Distribution of {target_name} given interventional strategy of {feature_name}"
-        )
+        plt.title(f"Distribution of {target_name} given interventional strategy of {feature_name}")
         path_save = "intervention"
     plt.xlabel(target_name)
     plt.ylabel("Probability")
@@ -386,9 +404,7 @@ def plot_counterfactuals_or_shifts(
     plt.clf()
 
 
-def compute_effect(
-    cf, intervention_marginals, control_marginals, target_class, N, alpha=0.05
-):
+def compute_effect(cf, intervention_marginals, control_marginals, target_class, N, alpha=0.05):
     """
     Calculate the Average Treatment Effect (ATE) for each level of a feature distribution.
 
@@ -422,15 +438,10 @@ def compute_effect(
     """
     list_dfs = []
     control_counts = (
-        pd.DataFrame.from_dict(control_marginals, orient="index").rename(
-            columns={0: "counts"}
-        )
-        * N
+        pd.DataFrame.from_dict(control_marginals, orient="index").rename(columns={0: "counts"}) * N
     )
     intervention_counts = (
-        pd.DataFrame.from_dict(intervention_marginals, orient="index").rename(
-            columns={0: "counts"}
-        )
+        pd.DataFrame.from_dict(intervention_marginals, orient="index").rename(columns={0: "counts"})
         * N
     )
     # in case we use counterfactual we need to replace 0 for the sake of calculations
@@ -453,23 +464,15 @@ def compute_effect(
                     error = 1 / (expected_no * N) + 1 / (expected_yes * N) - 2 / N
                     mean = expected_yes / expected_no
                     lower = np.exp(np.log(mean) + norm.ppf(alpha / 2) * np.sqrt(error))
-                    upper = np.exp(
-                        np.log(mean) + norm.ppf(1 - alpha / 2) * np.sqrt(error)
-                    )
+                    upper = np.exp(np.log(mean) + norm.ppf(1 - alpha / 2) * np.sqrt(error))
 
             else:
-                expected_no = (indx * cf["control"]).sum() / (
-                    1 - (indx * cf["control"]).sum()
-                )
-                expected_yes = (indx * (cf[level])).sum() / (
-                    1 - (indx * (cf[level])).sum()
-                )
+                expected_no = (indx * cf["control"]).sum() / (1 - (indx * cf["control"]).sum())
+                expected_yes = (indx * (cf[level])).sum() / (1 - (indx * (cf[level])).sum())
                 mean = expected_yes / expected_no
                 error = (1 / control_counts).sum() + (1 / intervention_counts).sum()
                 lower = np.exp(np.log(mean) + norm.ppf(alpha / 2) * np.sqrt(error[0]))
-                upper = np.exp(
-                    np.log(mean) + norm.ppf(1 - alpha / 2) * np.sqrt(error[0])
-                )
+                upper = np.exp(np.log(mean) + norm.ppf(1 - alpha / 2) * np.sqrt(error[0]))
 
             effects[level] = {
                 "Estimand": method,
@@ -538,7 +541,7 @@ def plot_ATEs(cf, feature_name, target_name, path, counterfactuals=False):
         + facet_grid("Estimand~", scales="free")
         + labs(title=title, x=x_lab)
         + theme(axis_text_x=element_text(angle=90, hjust=1))
-    ).draw(show=True)
+    ).draw(show=False)
     if path:
         fig.savefig(
             f"{path}/{path_save}_ate_plot_{feature_name}.png",
@@ -622,10 +625,7 @@ def plot_uplifts(cf, feature_name, target_name, path, counterfactuals=False):
         plt.title(f"Uplift of {target_name} by interventional strategy")
         plt.ylabel(f"Interventional Strategy of {feature_name}")
         path_save = "intervention"
-    plt.show()
 
     if path:
-        plt.savefig(
-            f"{path}/{path_save}_uplift_plot_{feature_name}.png", bbox_inches="tight"
-        )
+        plt.savefig(f"{path}/{path_save}_uplift_plot_{feature_name}.png", bbox_inches="tight")
     plt.clf()

@@ -1,0 +1,131 @@
+site_name: Causal Canvas
+site_description: Causal discovery + Bayesian-network probabilistic modelling.
+site_url: https://playtika.github.io/causal_canvas/
+repo_url: https://github.com/PlaytikaOSS/causal-canvas
+repo_name: PlaytikaOSS/causal-canvas
+edit_uri: edit/develop/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 2
+            docstring_style: numpy
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            show_if_no_docstring: false
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      kernel_name: python3
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - For PMs:
+      - for-pms/index.md
+      - Overview: for-pms/overview.md
+      - Questions to ask your data team: for-pms/questions-to-ask.md
+      - Glossary: for-pms/glossary.md
+  - For Analysts:
+      - for-analysts/index.md
+      - Quickstart: for-analysts/quickstart.md
+      - Interpreting results: for-analysts/interpreting-results.md
+      - Pitfalls: for-analysts/pitfalls.md
+      - Worked example (students): for-analysts/worked-example-students.md
+  - For Statisticians:
+      - for-statisticians/index.md
+      - Assumptions & identifiability: for-statisticians/assumptions.md
+      - Estimands: for-statisticians/estimands.md
+      - Non-linear NOTEARS: for-statisticians/nonlinear-notears.md
+      - Non-linear causal discovery (deep dive): for-statisticians/nonlinear-causal-discovery-deep-dive.md
+      - Discretisation bias: for-statisticians/discretisation-bias.md
+      - References: for-statisticians/references.md
+  - Concepts:
+      - Introduction: concepts/introduction.md
+      - Causal discovery: concepts/causal-discovery.md
+      - Linear causal discovery (deep dive): concepts/linear-causal-discovery.md
+      - Bayesian networks: concepts/bayesian-networks.md
+      - Bayesian network estimation (deep dive): concepts/bayesian-networks-estimation.md
+      - Interventions and counterfactuals: concepts/interventions-counterfactuals.md
+      - Interventions and counterfactuals (deep dive): concepts/interventions-counterfactuals-deep-dive.md
+  - Notebooks:
+      - notebooks/index.md
+      - Synthetic data generation: notebooks/01_generate_synthetic_data.ipynb
+  - Reference:
+      - reference/index.md
+      - CLI: reference/cli.md
+      - Configuration: reference/config.md
+      - Outputs: reference/outputs.md
+      - Security: reference/security.md
+      - Security audit: SECURITY_AUDIT.md
+      - ADR-0001 causalnex migration: adr/0001-causalnex-migration.md
+      - API:
+          - reference/api/index.md
+          - StructureLearner: reference/api/structure_learner.md
+          - BayesianNetworkEstimator: reference/api/bayesian_network_estimator.md
+          - Preprocessor: reference/api/preprocessor.md
+          - Non-linear NOTEARS: reference/api/nonlinear_notears.md
+          - Inference utils: reference/api/inference_utils.md
+          - Evaluation utils: reference/api/evaluation_utils.md
+          - Config schema: reference/api/script_config.md
+  - Glossary: glossary.md
+  - Contributing: contributing.md

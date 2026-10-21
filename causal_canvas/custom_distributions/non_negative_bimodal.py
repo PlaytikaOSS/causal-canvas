@@ -1,6 +1,28 @@
+"""
+Bimodal non-negative distribution type for non-linear NOTEARS.
+
+Defines :class:`DistTypeNonNegBimodal`, an implementation of the
+``causalnex`` ``DistTypeBase`` interface for non-negative continuous
+features whose distribution is bimodal (e.g. zero-inflated mixed with
+a positive mode).
+
+**Layer**: low-level. Plugged into the solver via
+``dist_type_aliases["bimodal_pos_cont"]`` in the package ``__init__``.
+
+**Relationship to causalnex**: subclasses
+``causal_canvas.vendored.dist_type._base.DistTypeBase`` and slots
+into the same registry as the upstream ``DistType*`` classes.
+
+See also
+--------
+:mod:`causal_canvas.custom_notears_mlp` — consumer of this dist type.
+:mod:`causal_canvas.custom_distributions` — the dist-type registry.
+"""
+
 import torch
 import torch.nn as nn
-from causalnex.structure.pytorch.dist_type._base import DistTypeBase
+
+from causal_canvas.vendored.dist_type._base import DistTypeBase
 
 
 class DistTypeNonNegBimodal(DistTypeBase):
@@ -93,9 +115,7 @@ class DistTypeNonNegBimodal(DistTypeBase):
             Log-likelihood for the Gaussian distribution.
         """
         std = torch.tensor(std)
-        log_likelihood = -0.5 * (
-            ((X[:, self.idx] - mean) / std) ** 2 + 2 * torch.log(std)
-        )
+        log_likelihood = -0.5 * (((X[:, self.idx] - mean) / std) ** 2 + 2 * torch.log(std))
         return torch.tensor(log_likelihood.mean())
 
     def loss(self, X, X_hat):
@@ -118,9 +138,7 @@ class DistTypeNonNegBimodal(DistTypeBase):
         log_likelihood2 = self.log_likelihood(X, X_hat, self.mean2, self.std)
 
         # Combine the losses with learnable mixture ratio
-        bimodal_loss = -(
-            self.alpha * log_likelihood1 + (1 - self.alpha) * log_likelihood2
-        )
+        bimodal_loss = -(self.alpha * log_likelihood1 + (1 - self.alpha) * log_likelihood2)
 
         return bimodal_loss.mean()
 

@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import fire
 import pandas as pd
@@ -76,11 +77,10 @@ def predict_and_evaluate_models(config_file: str):
             models_combinations=config.models_combinations,
         )
         logger.info(f"Models detected for dataset:{model_names_list}")
-        output_path = (
-            config.output_path
-            if len(config.data_train_input_path) == 1
-            else config.output_path + f"segment_{i}/"
-        )
+        # The helpers below build paths by string concatenation, so keep a trailing "/".
+        output_path = str(config.output_path).rstrip("/") + "/"
+        if len(config.data_train_input_path) != 1:
+            output_path += f"segment_{i}/"
 
         all_predictions = dict()
         scores = dict()
@@ -247,9 +247,13 @@ def predict_and_evaluate_models(config_file: str):
         )
 
     logger.info("Writing config file")
-    with open(config.output_path + "config.yml", "w") as outfile:
+    with open(Path(config.output_path) / "config.yml", "w") as outfile:
         yaml.dump(dict(config), outfile)
 
 
-if __name__ == "__main__":
+def main():
     fire.Fire(predict_and_evaluate_models)
+
+
+if __name__ == "__main__":
+    main()

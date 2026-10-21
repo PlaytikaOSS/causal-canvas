@@ -1,0 +1,1 @@
+from .DiscreteBayesianNetwork import DiscreteBayesianNetwork as DiscreteBayesianNetwork

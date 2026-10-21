@@ -1,7 +1,29 @@
+"""
+Tweedie distribution type for non-linear NOTEARS.
+
+Defines :class:`DistTypeTweedie`, an implementation of the
+``causalnex`` ``DistTypeBase`` interface for Tweedie-distributed
+features (a compound Poisson-gamma family that handles zero-inflated
+positive-continuous targets common in spend / revenue data).
+
+**Layer**: low-level. Plugged into the solver via
+``dist_type_aliases["tweedie"]`` in the package ``__init__``.
+
+**Relationship to causalnex**: subclasses
+``causal_canvas.vendored.dist_type._base.DistTypeBase`` and slots
+into the same registry as the upstream ``DistType*`` classes.
+
+See also
+--------
+:mod:`causal_canvas.custom_notears_mlp` — consumer of this dist type.
+:mod:`causal_canvas.custom_distributions` — the dist-type registry.
+"""
+
 import numpy as np
 import torch
 import torch.nn as nn
-from causalnex.structure.pytorch.dist_type._base import DistTypeBase
+
+from causal_canvas.vendored.dist_type._base import DistTypeBase
 
 
 class DistTypeTweedie(DistTypeBase):
@@ -40,14 +62,10 @@ class DistTypeTweedie(DistTypeBase):
             Preprocessed X.
         """
         if (X[:, self.idx] < 0).sum() > 0:
-            raise ValueError(
-                "All data must be non-negative for the Tweedie distribution."
-            )
+            raise ValueError("All data must be non-negative for the Tweedie distribution.")
         return X
 
-    def loss(
-        self, X: torch.Tensor, X_hat: torch.Tensor, p: float = 1.5
-    ) -> torch.Tensor:
+    def loss(self, X: torch.Tensor, X_hat: torch.Tensor, p: float = 1.5) -> torch.Tensor:
         """Compute the negative log-likelihood loss for the Tweedie GLM.
 
         Parameters
@@ -82,9 +100,7 @@ class DistTypeTweedie(DistTypeBase):
 
         # Combine Poisson and Gamma losses based on the Tweedie power parameter
         tweedie_loss = (
-            (1 / (p * (p - 1))) * ((mu**p) / p - mu * X[:, self.idx])
-            + poisson_loss
-            + gamma_loss
+            (1 / (p * (p - 1))) * ((mu**p) / p - mu * X[:, self.idx]) + poisson_loss + gamma_loss
         )
 
         return tweedie_loss.mean()
@@ -131,7 +147,7 @@ class DistTypeTweedie(DistTypeBase):
             Modified X_hat. Must be the same shape as the passed-in data.
             Projects the self.idx column from the latent space to the dist_type space.
         """
-        X_hat[:, self.idx] = (
-            X_hat[:, self.idx].pow(2 - self.p) / (1 - self.p)
-        ).exp() / (1 - self.p)
+        X_hat[:, self.idx] = (X_hat[:, self.idx].pow(2 - self.p) / (1 - self.p)).exp() / (
+            1 - self.p
+        )
         return X_hat

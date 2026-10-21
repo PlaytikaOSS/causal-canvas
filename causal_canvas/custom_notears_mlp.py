@@ -1,16 +1,45 @@
+"""
+Non-linear NOTEARS solver (low-level).
+
+This module defines :class:`NotearsMLP`, a PyTorch ``nn.Module`` that
+implements the MLP-based non-linear NOTEARS structure-learning
+algorithm from Zheng et al. 2020 with Playtika-specific distribution
+types (see ``causal_canvas.custom_distributions``) plugged in via the
+``DistTypeBase`` interface (vendored from causalnex).
+
+**Layer**: low-level. Consumers should almost never import from here
+directly — use :mod:`causal_canvas.nonlinear_notears` instead, which
+provides the DataFrame-based ``from_pandas`` / ``from_numpy`` wrappers
+and returns a :class:`causal_canvas.vendored.structure_model.StructureModel`.
+
+**Relationship to causalnex**: this is a customization of
+``causalnex.structure.pytorch.core.NotearsMLP`` (causalnex 0.12.1, Apache-2.0)
+so we can register Playtika-specific distribution types (gamma, tweedie,
+bimodal positive-continuous, etc.). Since 0.2.0 we *own* this code and its
+supporting pieces (``LocallyConnected``, ``DistTypeBase``) under
+:mod:`causal_canvas.vendored`; upstream is dormant, so torch-compatibility
+fixes are ours to make (ADR-0001).
+
+See also
+--------
+:mod:`causal_canvas.nonlinear_notears` — high-level wrapper.
+"""
+
 import logging
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Optional, Union
 
 import numpy as np
 import scipy.optimize as sopt
 import torch
-from causalnex.structure.pytorch.dist_type._base import DistTypeBase
-from causalnex.structure.pytorch.nonlinear import LocallyConnected
 from loguru import logger
 from scipy.optimize import HessianUpdateStrategy
 from sklearn.base import BaseEstimator
 from torch import nn
+
+from causal_canvas.vendored.dist_type._base import DistTypeBase
+from causal_canvas.vendored.locally_connected import LocallyConnected
 
 
 class NotearsMLP(nn.Module, BaseEstimator):
@@ -25,11 +54,11 @@ class NotearsMLP(nn.Module, BaseEstimator):
     def __init__(
         self,
         n_features: int,
-        dist_types: List[DistTypeBase],
+        dist_types: list[DistTypeBase],
         use_bias: bool = False,
         use_gpu: bool = True,
-        hidden_layer_units: Iterable[int] = (0,),
-        bounds: Optional[List[Tuple[int, int]]] = None,
+        hidden_layer_units: Sequence[int] = (0,),
+        bounds: Optional[list[tuple[Optional[int], Optional[int]]]] = None,
         lasso_beta: float = 0.0,
         ridge_beta: float = 0.0,
         nonlinear_clamp: float = 1e-2,
@@ -77,9 +106,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
             else [n_features, 1]
         )
         # dag_layer: initial linear layer
-        self.dag_layer = nn.Linear(
-            self.dims[0], self.dims[0] * self.dims[1], bias=use_bias
-        ).float()
+        self.dag_layer = nn.Linear(self.dims[0], self.dims[0] * self.dims[1], bias=use_bias).float()
 
         self.dag_layer.to(self.device)  # Send DAG layer to device
         nn.init.zeros_(self.dag_layer.weight)
@@ -89,10 +116,8 @@ class NotearsMLP(nn.Module, BaseEstimator):
 
         # loc_lin_layer: local linear layers
         layers = [
-            LocallyConnected(
-                self.dims[0], input_features, output_features, bias=use_bias
-            ).float()
-            for input_features, output_features in zip(self.dims[1:-1], self.dims[2:])
+            LocallyConnected(self.dims[0], input_features, output_features, bias=use_bias).float()
+            for input_features, output_features in zip(self.dims[1:-1], self.dims[2:], strict=False)
         ]
         self._loc_lin_layer_weights = nn.ModuleList(layers)
 
@@ -105,12 +130,12 @@ class NotearsMLP(nn.Module, BaseEstimator):
         # set the dist types
         self.dist_types = dist_types
         # type the adjacency matrix
-        self.adj = None
-        self.adj_std_errors = None
-        self.adj_mean_effect = None
-        self.loss_history = []
-        self.std_errors = None
-        self.hessian_matrix = None
+        self.adj: Optional[np.ndarray] = None
+        self.adj_std_errors: Optional[np.ndarray] = None
+        self.adj_mean_effect: Optional[np.ndarray] = None
+        self.loss_history: list[float] = []
+        self.std_errors: Optional[np.ndarray] = None
+        self.hessian_matrix: Optional[np.ndarray] = None
 
     @property
     def _logger(self):
@@ -159,7 +184,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
         x = self.dag_layer(x)  # [n, d * m1]
         x = x.view(-1, self.dims[0], self.dims[1])  # [n, d, m1]
 
-        for output_dim, layer in zip(self.dims[1:], self.loc_lin_layer_weights):
+        for output_dim, layer in zip(self.dims[1:], self.loc_lin_layer_weights, strict=False):
             x = torch.sigmoid(x)  # [n, d, m1]
             x = nn.LayerNorm(
                 output_dim,
@@ -248,19 +273,13 @@ class NotearsMLP(nn.Module, BaseEstimator):
                 break
 
             if n_iter == max_iter - 1 and h > h_tol:
-                self._logger.warning(
-                    "Failed to converge. Consider increasing max_iter."
-                )
+                self._logger.warning("Failed to converge. Consider increasing max_iter.")
 
         # calculate the adjacency matrix after the fitting is finished
-        self.adj = (
-            self._calculate_adj(X_torch, mean_effect=False).cpu().detach().numpy()
-        )
-        self.adj_mean_effect = (
-            self._calculate_adj(X_torch, mean_effect=True).cpu().detach().numpy()
-        )
+        self.adj = self._calculate_adj(X_torch, mean_effect=False).cpu().detach().numpy()
+        self.adj_mean_effect = self._calculate_adj(X_torch, mean_effect=True).cpu().detach().numpy()
 
-    def _get_param_names(self) -> List[str]:
+    def _get_param_names(self) -> list[str]:
         """
         Helper method to get parameter names.
 
@@ -268,7 +287,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
             List of parameter names
         """
         param_names = []
-        for name, param in self.named_parameters():
+        for name, _param in self.named_parameters():
             param_names.append(name)
         return param_names
 
@@ -290,7 +309,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
 
     def _dual_ascent_step(
         self, X: torch.Tensor, rho: float, alpha: float, h: float, rho_max: float
-    ) -> Tuple[float, float, float]:
+    ) -> tuple[float, float, float]:
         """
         Perform one step of dual ascent in augmented Lagrangian.
 
@@ -305,7 +324,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
             rho, alpha and h
         """
 
-        def _get_flat_grad(params: List[torch.Tensor]) -> np.ndarray:
+        def _get_flat_grad(params: list[torch.Tensor]) -> np.ndarray:
             """
             Get flatten gradient vector from the parameters of the model
 
@@ -326,8 +345,8 @@ class NotearsMLP(nn.Module, BaseEstimator):
             return torch.cat(views, 0).cpu().detach().numpy()
 
         def _get_flat_bounds(
-            params: List[torch.Tensor],
-        ) -> List[Tuple[Union[None, float]]]:
+            params: list[torch.Tensor],
+        ) -> list[tuple[Union[None, float]]]:
             """
             Get bound constraint for each parameter in flatten vector form from the parameters of the model
 
@@ -348,7 +367,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
 
             return bounds
 
-        def _get_flat_params(params: List[torch.Tensor]) -> np.ndarray:
+        def _get_flat_params(params: list[torch.Tensor]) -> np.ndarray:
             """
             Get parameters in flatten vector from the parameters of the model
 
@@ -359,14 +378,11 @@ class NotearsMLP(nn.Module, BaseEstimator):
                 flatten parameters vector in numpy form
             """
             views = [
-                p.data.to_dense().view(-1) if p.data.is_sparse else p.data.view(-1)
-                for p in params
+                p.data.to_dense().view(-1) if p.data.is_sparse else p.data.view(-1) for p in params
             ]
             return torch.cat(views, 0).cpu().detach().numpy()
 
-        def _update_params_from_flat(
-            params: List[torch.Tensor], flat_params: np.ndarray
-        ):
+        def _update_params_from_flat(params: list[torch.Tensor], flat_params: np.ndarray):
             """
             Update parameters of the model from the parameters in the form of flatten vector
 
@@ -376,9 +392,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
             """
             offset = 0
             flat_params_torch = (
-                torch.from_numpy(flat_params)
-                .to(torch.get_default_dtype())
-                .to(self.device)
+                torch.from_numpy(flat_params).to(torch.get_default_dtype()).to(self.device)
             )
             for p in params:
                 n_params = p.numel()
@@ -386,7 +400,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
                 p.data = flat_params_torch[offset : offset + n_params].view_as(p.data)
                 offset += n_params
 
-        def _func(flat_params: np.ndarray) -> Tuple[float, np.ndarray]:
+        def _func(flat_params: np.ndarray) -> tuple[float, np.ndarray]:
             """
             Objective function that the NOTEARS algorithm tries to minimise.
 
@@ -450,7 +464,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
             # Create a dictionary to map parameter names to standard errors
             self.std_errors_dict = {
                 self.clean_param_name(name): std_error
-                for name, std_error in zip(self.param_names, self.std_errors)
+                for name, std_error in zip(self.param_names, self.std_errors, strict=False)
             }
 
             _update_params_from_flat(params, sol.x)
@@ -473,9 +487,7 @@ class NotearsMLP(nn.Module, BaseEstimator):
 
         # only consider the dag_layer for h(W) for compute efficiency
         dag_layer_weight = self.dag_layer_weight.view(d, -1, d)  # [j, m1, i]
-        square_weight_mat = torch.sum(
-            dag_layer_weight * dag_layer_weight, dim=1
-        ).t()  # [i, j]
+        square_weight_mat = torch.sum(dag_layer_weight * dag_layer_weight, dim=1).t()  # [i, j]
 
         # modify the h(W) matrix to deal with expanded columns
         original_idxs = []

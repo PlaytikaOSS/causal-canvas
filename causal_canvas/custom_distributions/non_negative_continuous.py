@@ -1,5 +1,27 @@
+"""
+Non-negative continuous distribution type for non-linear NOTEARS.
+
+Defines :class:`DistTypeNonNegativeContinuous`, an implementation of
+the ``causalnex`` ``DistTypeBase`` interface for strictly non-negative
+continuous features (uses a softplus-style link to enforce the
+non-negativity constraint).
+
+**Layer**: low-level. Plugged into the solver via
+``dist_type_aliases["pos_cont"]`` in the package ``__init__``.
+
+**Relationship to causalnex**: subclasses
+``causal_canvas.vendored.dist_type._base.DistTypeBase`` and slots
+into the same registry as the upstream ``DistType*`` classes.
+
+See also
+--------
+:mod:`causal_canvas.custom_notears_mlp` — consumer of this dist type.
+:mod:`causal_canvas.custom_distributions` — the dist-type registry.
+"""
+
 import torch
-from causalnex.structure.pytorch.dist_type._base import DistTypeBase
+
+from causal_canvas.vendored.dist_type._base import DistTypeBase
 
 
 class DistTypeNonNegativeContinuous(DistTypeBase):
@@ -33,9 +55,7 @@ class DistTypeNonNegativeContinuous(DistTypeBase):
         torch.Tensor
             Scalar PyTorch tensor of the reconstruction loss between X and X_hat.
         """
-        return (0.5 / X.shape[0]) * torch.sum(
-            (torch.exp(X_hat[:, self.idx]) - X[:, self.idx]) ** 2
-        )
+        return (0.5 / X.shape[0]) * torch.sum((torch.exp(X_hat[:, self.idx]) - X[:, self.idx]) ** 2)
 
     def inverse_link_function(self, X_hat: torch.Tensor) -> torch.Tensor:
         """Applies the softplus inverse link function for non-negative continuous data.
