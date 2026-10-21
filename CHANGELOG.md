@@ -31,50 +31,50 @@ Breaking release — see [ADR-0001](docs/adr/0001-causalnex-migration.md).
 
 ## [0.1.0] — 2026-04-25
 
-First tagged release. Consolidates a large cleanup cycle (PRs #12 – #54) that hardened typing, packaging, CI, and security, brought the README back in sync with the code, ported the GitHub wiki content in-tree, and added an experimental uv-on-CI probe so Phase B (causalnex migration) can land on a maintained package manager. Local validation: 54 tests pass in 28s on Apple M1 Pro / 32 GB / Python 3.10.19.
+First tagged release. Consolidates a large cleanup cycle  that hardened typing, packaging, CI, and security, brought the README back in sync with the code, ported the GitHub wiki content in-tree, and added an experimental uv-on-CI probe so Phase B (causalnex migration) can land on a maintained package manager. Local validation: 54 tests pass in 28s on Apple M1 Pro / 32 GB / Python 3.10.19.
 
 ### Added
 
-- Console scripts for the five entry points: `infer-bn`, `infer-dowhy`, `evaluate-experiments`, `repeat-experiments`, `iterate-structure-learning` (#19).
-- `--debug` flag on entry points to log the full config on startup; the default now logs a short summary only (#21).
-- Curated public API surface in `causal_canvas.__init__`: `StructureLearner`, `BayesianNetworkEstimator`, `Preprocessor`, `InferenceMethod` (#23).
-- `py.typed` marker so downstream consumers get types via `mypy` / editors (#20).
-- Smoke-test suite for core modules (#16).
-- Pickle-load path validation and artefact SHA-256 hashing in `BayesianNetworkEstimator` / `infer_do_why` (#17).
-- `tox -e lint` environment (pre-commit: ruff + mypy + pytest); `tox -e audit` (pip-audit, non-blocking) (#24, #41).
-- Ruff rule sets: `F` (pyflakes), `B` (bugbear), `UP` (pyupgrade), `E` (pycodestyle errors) (#24, #32, #36, #37).
-- Module-boundary docstrings on `custom_notears_mlp.py` and `nonlinear_notears.py` (#25).
-- `docs/SECURITY_AUDIT.md` cataloguing known CVEs in the dep surface with a triage flow (#41).
-- Concept docs ported in-tree from the GitHub wiki: `docs/concepts/{introduction,bayesian-networks-estimation,linear-causal-discovery,nonlinear-causal-discovery-deep-dive,interventions-counterfactuals-deep-dive}.md`. Configuration reference consolidated into `docs/reference/config.md`. External wiki links removed from the README (#53).
-- Experimental `[testenv:test-uv]` running pytest under uv. Currently inert in default CI (#54).
+- Console scripts for the five entry points: `infer-bn`, `infer-dowhy`, `evaluate-experiments`, `repeat-experiments`, `iterate-structure-learning`.
+- `--debug` flag on entry points to log the full config on startup; the default now logs a short summary only.
+- Curated public API surface in `causal_canvas.__init__`: `StructureLearner`, `BayesianNetworkEstimator`, `Preprocessor`, `InferenceMethod`.
+- `py.typed` marker so downstream consumers get types via `mypy` / editors.
+- Smoke-test suite for core modules.
+- Pickle-load path validation and artefact SHA-256 hashing in `BayesianNetworkEstimator` / `infer_do_why`.
+- `tox -e lint` environment (pre-commit: ruff + mypy + pytest); `tox -e audit` (pip-audit, non-blocking).
+- Ruff rule sets: `F` (pyflakes), `B` (bugbear), `UP` (pyupgrade), `E` (pycodestyle errors).
+- Module-boundary docstrings on `custom_notears_mlp.py` and `nonlinear_notears.py`.
+- `docs/SECURITY_AUDIT.md` cataloguing known CVEs in the dep surface with a triage flow.
+- Concept docs ported in-tree from the GitHub wiki: `docs/concepts/{introduction,bayesian-networks-estimation,linear-causal-discovery,nonlinear-causal-discovery-deep-dive,interventions-counterfactuals-deep-dive}.md`. Configuration reference consolidated into `docs/reference/config.md`. External wiki links removed from the README.
+- Experimental `[testenv:test-uv]` running pytest under uv. Currently inert in default CI.
 
 ### Changed
 
-- `pyproject.toml` migrated to PEP 621 `[project]` layout, with a hybrid `[tool.poetry]` block retained for Poetry 1.x in the Playtika CI image (#38).
-- Migrated to `pydantic` v2 throughout; lock file regenerated; `conint`/`confloat` replaced with `Annotated + Field` (#22, #26, #30).
-- `condenced_thresholds` → `condensed_thresholds` (pydantic field) and `condenced_splits.json` → `condensed_splits.json` (artefact filename). Straight rename, no deprecation shim (#42).
-- `repeat_experiments.py` hardcoded `/mnt/VAST_SHARED/...` paths parameterised as Fire CLI args with Playtika-default values (#40).
-- Config logging: entry points now emit a compact summary by default (`event=... data=... output=...`); pass `--debug` for the full dump (#21).
-- README fully rewritten file tree, install section, and CLI invocations against the current code; typos fixed; stale conda/pip path dropped (#43).
+- `pyproject.toml` migrated to PEP 621 `[project]` layout, with a hybrid `[tool.poetry]` block retained for Poetry 1.x in the Playtika CI image.
+- Migrated to `pydantic` v2 throughout; lock file regenerated; `conint`/`confloat` replaced with `Annotated + Field`.
+- `condenced_thresholds` → `condensed_thresholds` (pydantic field) and `condenced_splits.json` → `condensed_splits.json` (artefact filename). Straight rename, no deprecation shim.
+- `repeat_experiments.py` hardcoded `/mnt/VAST_SHARED/...` paths parameterised as Fire CLI args with Playtika-default values.
+- Config logging: entry points now emit a compact summary by default (`event=... data=... output=...`); pass `--debug` for the full dump.
+- README fully rewritten file tree, install section, and CLI invocations against the current code; typos fixed; stale conda/pip path dropped.
 
 ### Fixed
 
-- `infer_do_why` no longer blocks on interactive matplotlib backends (#12).
-- `tox -e test` now actually runs the test suite; coverage target corrected; `--doctest-modules` removed (#15).
-- Mypy-clean baseline across the package: `custom_notears_mlp`, `nonlinear_notears`, `structure_learner`, `bayesian_network_estimator`, `evaluation_utils`, `DistTypeCategorical`, and the non-linear-NOTEARS body-level errors (#27, #28, #29, #31, #33, #34, #35, #39).
-- Grammar slip in `StructureLearner` docstring: "rules care used top in order to avoid" → "rules are used to avoid" (#43).
+- `infer_do_why` no longer blocks on interactive matplotlib backends.
+- `tox -e test` now actually runs the test suite; coverage target corrected; `--doctest-modules` removed.
+- Mypy-clean baseline across the package: `custom_notears_mlp`, `nonlinear_notears`, `structure_learner`, `bayesian_network_estimator`, `evaluation_utils`, `DistTypeCategorical`, and the non-linear-NOTEARS body-level errors.
+- Grammar slip in `StructureLearner` docstring: "rules care used top in order to avoid" → "rules are used to avoid".
 
 ### Removed
 
-- `requirements.txt` (superseded by Poetry; console scripts are the install interface) (#19).
-- `subprocess(..., shell=True)` in experiment runners, replaced with argv-list form (#18).
-- `dummy_example_results/` — 11 MB, 102 files of frozen pre-rename artefacts that no test referenced (#42).
+- `requirements.txt` (superseded by Poetry; console scripts are the install interface).
+- `subprocess(..., shell=True)` in experiment runners, replaced with argv-list form.
+- `dummy_example_results/` — 11 MB, 102 files of frozen pre-rename artefacts that no test referenced.
 
 ### Security
 
-- Validate pickle-load paths and log artefact hashes before unpickling saved models; mitigates arbitrary-code-execution risk from untrusted checkpoint files (#17).
-- Drop `subprocess(shell=True)` in experiment runners to eliminate a shell-injection vector (#18).
-- `tox -e audit` runs `pip-audit` against the installed environment; findings are triaged in `docs/SECURITY_AUDIT.md` (#41).
+- Validate pickle-load paths and log artefact hashes before unpickling saved models; mitigates arbitrary-code-execution risk from untrusted checkpoint files.
+- Drop `subprocess(shell=True)` in experiment runners to eliminate a shell-injection vector.
+- `tox -e audit` runs `pip-audit` against the installed environment; findings are triaged in `docs/SECURITY_AUDIT.md`.
 
 [Unreleased]: https://github.com/PlaytikaOSS/causal-canvas/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/PlaytikaOSS/causal-canvas/releases/tag/v0.1.0

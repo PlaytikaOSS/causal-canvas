@@ -34,5 +34,5 @@ Each config writes to its own `output_path`:
 - `config_inference.yaml` → `dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/interventions/k2_prior_tree_2/`
 
 The repo-tracked reference outputs under `dummy_example_results/` were
-deleted in #42 to keep the working tree small. Re-running the pipeline
+removed to keep the working tree small. Re-running the pipeline
 regenerates them locally; the artefacts are not version-controlled.

@@ -124,7 +124,7 @@ Toy causal graph after linear causal discovery with lasso_multiplier =  0.2 and 
 
 **Figure 8:** Toy causal graph after non-linear causal discovery with lasso_multiplier =  0.2, ridge_multiplier: 0.1, and one hidden layer with 2 neurons and w_threshold=0.08.
 
-![Diagram: all weights w threshold heatmap](https://github.com/PlaytikaOSS/causal-canvas/raw/main/dummy_example_results/students_portuguese_grades/non_linear_causal_discovery/20240216_230308/causal_discovery/all_weights_w_threshold_heatmap.png)
+![Diagram: all weights w threshold heatmap](https://github.com/PlaytikaOSS/causal-canvas/raw/main/images/all_weights_w_threshold_heatmap.png)
 
 **Figure 9:** Toy heatmap with estimated weights after thresholding for lasso_multiplier =  0.2, ridge_multiplier: 0.1, and one hidden layer with 2 neurons and w_threshold=0.08. 
 

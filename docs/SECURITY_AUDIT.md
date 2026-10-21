@@ -10,7 +10,7 @@ The `[testenv:audit]` section in `tox.ini` is configured to report findings but 
 
 Once the backlog is cleared, flip to strict mode by removing the `-` prefix from `tox.ini`'s `pip-audit` command.
 
-## Current known issues (as of PR #41)
+## Current known issues (as of 0.1.0)
 
 27 advisories across 14 packages on the dev+runtime tree. Grouped by whether they're addressable standalone or blocked on a dependency chain:
 
