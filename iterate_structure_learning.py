@@ -7,9 +7,9 @@ docs/config.yaml
 The user needs to modify the configuration file
 to allow different lasso, ridge parameters, hidden layers or neurons.
 """
-
 import itertools
 import subprocess
+import sys
 
 import yaml
 from loguru import logger
@@ -62,11 +62,19 @@ def iterate_structure_learning():
             yaml.dump(config, outfile, default_flow_style=False)
 
             # Run the Causal Discovery script
-            subprocess.call(
-                f"python3 infer_bayesian_network.py -config_file {config_path}",
-                shell=True,
+            subprocess.check_call(
+                [
+                    sys.executable,
+                    "infer_bayesian_network.py",
+                    "-config_file",
+                    config_path,
+                ]
             )
 
 
-if __name__ == "__main__":
+def main():
     iterate_structure_learning()
+
+
+if __name__ == "__main__":
+    main()

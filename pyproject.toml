@@ -1,22 +1,70 @@
-[tool.poetry]
+[project]
 name = "causal-canvas"
-version = "0.1.0"
+version = "0.2.0"
+description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+authors = [
+    {name = "Sofia Karadimitriou", email = "sofia.m.karadimitriou@gmail.com"},
+    {name = "Jerome Carayol", email = "carayol_j@yahoo.fr"},
+    {name = "Stefano Piazza", email = "to.stefano.piazza@gmail.com"},
+    {name = "Armand Valsesia", email = "armandv@playtika.com"},
+]
+dependencies = [
+    # Bayesian-network + inference layer (replaces the abandoned causalnex; ADR-0001).
+    # Pinned tightly: pgmpy 1.x is still renaming public API between minors.
+    "pgmpy>=1.1.0,<1.2.0",
+    # Structure learning (vendored causalnex NOTEARS code needs these directly).
+    "torch>=2.13.0",
+    "networkx>=3.3",
+    "scikit-learn>=1.4",
+    "scipy>=1.11,<=1.15.3",
+    "ipython>=8.10.0",
+    "pyvis>=0.3.2",
+    "numpy>=2.0,<3.0",
+    "pandas>=2.2.2,<3.0.0",
+    "pyarrow>=19.0.0",
+    "pydantic>=2.6,<3.0",
+    "loguru>=0.7.2,<0.8.0",
+    "fire>=0.5.0,<0.8.0",
+    "plotnine>=0.14.0,<0.16.0",
+    "seaborn>=0.13.2,<0.14.0",
+    "pydot>=2.0.0,<4.0.0",
+    "ipywidgets>=8.1.2,<9.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Causal-effect identification / estimation / refutation (see causal_canvas.effect_estimation).
+dowhy = ["dowhy>=0.14,<0.15"]
+# `discretiser_method: mdlp` (carried over from causalnex's optional extra).
+mdlp = ["mdlp-discretization>=0.3.3,<0.4.0"]
+
+[project.scripts]
+infer-bn = "infer_bayesian_network:main"
+infer-dowhy = "infer_do_why:main"
+evaluate-experiments = "evaluate_experiments:main"
+repeat-experiments = "repeat_experiments:main"
+iterate-structure-learning = "iterate_structure_learning:main"
+
+[tool.poetry]
+# Poetry 1.x does not read PEP 621 [project] tables, so the core fields are
+# duplicated here to keep both Poetry versions working; Poetry 2 reads
+# [project] first and ignores the [tool.poetry] copies.
+name = "causal-canvas"
+version = "0.2.0"
 description = "A tool for Causal discovery with Structural Learning and probabilistic modelling of the learnt structure."
 authors = ["Sofia Karadimitriou <sofia.m.karadimitriou@gmail.com>", "Jerome Carayol <carayol_j@yahoo.fr>", "Stefano Piazza <to.stefano.piazza@gmail.com>", "Armand Valsesia <armandv@playtika.com>"]
-readme = "README.md"
-
-[tool.poetry.dependencies]
-python = ">=3.9, <3.11"
-causalnex = "^0.12.1"
-pydantic = "<2"
-loguru = "^0.7.2"
-fire = "^0.5.0"
-plotnine = "^0.12.4"
-seaborn = "^0.13.2"
-pydot = "^2.0.0"
-ipywidgets = "^8.1.2"
-pyarrow = "^15.0.0"
-pandas = "^1.5.3"
+# wheel content: PEP 621 has no equivalent for including single-file
+# modules alongside a package.
+packages = [
+    { include = "causal_canvas" },
+    { include = "infer_bayesian_network.py" },
+    { include = "infer_do_why.py" },
+    { include = "evaluate_experiments.py" },
+    { include = "repeat_experiments.py" },
+    { include = "iterate_structure_learning.py" },
+]
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.2.0"
@@ -24,13 +72,56 @@ pytest = "^8.0.0"
 pre-commit = "^3.6.0"
 
 [build-system]
-requires = ["poetry-core"]
+# Works with both Poetry 1.x (in CI image) and Poetry 2.x (for local development).
+requires = ["poetry-core>=1.5.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: tests that exercise full training loops (NOTEARS, NotearsMLP, BN fit) — skip with `-m 'not slow'`",
+]
 
 [tool.ruff]
 # Also format jupyter notebooks.
 extend-include = ["*.ipynb"]
+line-length = 100
+# Vendored upstream code keeps its original formatting so diffs against causalnex stay reviewable.
+extend-exclude = ["causal_canvas/vendored"]
+# pyproject.toml uses the Poetry 1.x [tool.poetry.dependencies] table
+# instead of PEP 621 [project], so ruff can't auto-detect the supported
+# Python range. Set it explicitly so UP rules don't rewrite our code into
+# 3.10+-only syntax (UP007 / UP045: Union[X, Y] -> X | Y).
+target-version = "py39"
 
 [tool.ruff.lint]
-# Enable the isort rules.
-extend-select = ["I"]
+# Enabled rule sets:
+#   I  — isort
+#   F  — pyflakes (unused imports, undefined names)
+#   E  — pycodestyle errors (whitespace, ambiguous names, etc.)
+#   B  — flake8-bugbear (common bug patterns: mutable defaults, unused loop
+#        vars, zip without strict=, etc.)
+#   UP — pyupgrade (modern syntax: typing.List -> list etc., 3.9-safe
+#        thanks to target-version)
+extend-select = ["I", "F", "E", "B", "UP"]
+# E501 is line-too-long. The formatter reflows what it safely can;
+# remaining violations are in docstrings / long f-strings where manual
+# reflow hurts readability. Keep line-length = 100 as documented but
+# don't fail CI on individual offenders.
+extend-ignore = ["E501"]
+
+[tool.mypy]
+# Lenient starting posture so CI doesn't immediately light up red on
+# third-party libraries without stubs. Tighten in follow-up PRs.
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Only type-check our own source, not vendored or generated code.
+files = ["causal_canvas"]
+# pgmpy ships no py.typed; local stubs cover the surface we use (ADR-0001).
+mypy_path = "typings"
+
+[[tool.mypy.overrides]]
+# Vendored causalnex code is kept as upstream wrote it (no annotations pass).
+module = "causal_canvas.vendored.*"
+ignore_errors = true

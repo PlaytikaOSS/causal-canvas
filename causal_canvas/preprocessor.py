@@ -1,10 +1,28 @@
+"""
+Data preparation for structure learning.
+
+Defines :class:`Preprocessor`, the high-level pydantic-validated class
+that takes a raw DataFrame and produces the cleaned, encoded frame
+expected by :class:`causal_canvas.structure_learner.StructureLearner`.
+Handles validation-set splitting (by date or random), categorical
+encoding to continuous values for NOTEARS, dropped/selected column
+masking, and optional row sampling.
+
+**Layer**: high-level. Zeroth stage of the typical pipeline — its
+output is the input DataFrame for ``StructureLearner``.
+
+See also
+--------
+:mod:`causal_canvas.structure_learner` — primary downstream consumer.
+"""
+
 import pickle
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, Optional
 
 import pandas as pd
 from loguru import logger
-from pydantic import BaseModel, confloat
+from pydantic import BaseModel, Field
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 
 # class Preprocessor(BaseModel):
@@ -151,29 +169,26 @@ class Preprocessor(BaseModel):
     df: pd.DataFrame
     event_col: str
     date_col: str
-    user_id_col: Optional[str]
-    drop_columns: List[str]
-    categorical_columns: Optional[List[str]]
-    features_select: Optional[List[str]]
-    sample_frac: Optional[confloat(gt=0, le=1)] = 1
+    user_id_col: Optional[str] = None
+    drop_columns: list[str]
+    categorical_columns: Optional[list[str]] = None
+    features_select: Optional[list[str]] = None
+    sample_frac: Optional[Annotated[float, Field(gt=0, le=1)]] = 1
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = {"arbitrary_types_allowed": True}
 
     def preprocess(self, artifacts_dir: Optional[Path] = None):
         logger.info("Preprocessing data")
         # Drop specified columns
         columns_to_drop = [self.user_id_col, self.date_col]
-        validation_set = self.df.drop(
-            [col for col in columns_to_drop if col], axis=1
-        ).reset_index(drop=True)
+        validation_set = self.df.drop([col for col in columns_to_drop if col], axis=1).reset_index(
+            drop=True
+        )
         validation_set[self.event_col] = validation_set[self.event_col].astype(int)
 
         # Drop additional specified columns
         if self.drop_columns:
-            validation_set = validation_set.drop(
-                self.drop_columns, axis=1, errors="ignore"
-            )
+            validation_set = validation_set.drop(self.drop_columns, axis=1, errors="ignore")
 
         # Handle numerical columns
         numerical_cols = [

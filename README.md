@@ -1,194 +1,228 @@
 # Causal Canvas
 
-This repository provides a tool for Causal discovery with Structural Learning and probabilistic modelling of
+Causal Canvas is a tool for causal discovery with structural learning and probabilistic modelling of
 the learnt structure.
-It uses `causalnex` library in which a fully connected graph is initial assumed
+It uses a NOTEARS implementation (vendored from `causalnex`, see `causal_canvas/vendored/`) in which a fully connected graph is initially assumed
 but then the structure is learned through the NOTEARS algorithm by [Zheng et al. (2018)](https://proceedings.neurips.cc/paper_files/paper/2018/file/e347c51419ffb23ca3fd5050202f9c3d-Paper.pdf).
 
-New addition: Non-linear Structure Learning with NOTEARS-MLP, please navigate to our dedicated [wiki page](https://wiki.playtika.com/display/AILAB/1.2+Non-linear+Causal+Discovery) for more information.
+Non-linear structure learning with NOTEARS-MLP is supported alongside the original linear variant. The tool also performs do-calculus inference (Pearl).
 
-More information on `causalnex` library can be found in the [official python documentation](https://causalnex.readthedocs.io/en/latest/index.html#).
+The pipeline reads a YAML config and:
 
-The tool conducts as well the do why calculus of Judea Pearl.
+- loads and preprocesses tabular data,
+- fits a structure learner (linear or non-linear NOTEARS) under user-supplied tabu constraints,
+- prunes the resulting weighted graph to a DAG,
+- discretises numeric features and fits a Bayesian-network probabilistic model,
+- extracts conditional probabilities for chosen nodes,
+- writes interactive HTML graphs and CSV/JSON artefacts to the output directory.
 
-This script performs the following steps for now:
+For the conceptual background — causal discovery, Bayesian networks, do-calculus interventions and counterfactuals — see the in-tree documentation:
 
-* Read input configuration file
-* Load data
-* Preprocess data
-* Fit structure learner (Linear NOTEARS or non-linear NOTEARS)
-* Calculate fully connected graph with constraints that event, e.g. churn cannot cause features
-* Calculate largest subgraph
-* Calculate pruned graph based on threshold `w`
-* Calculate largest subgraph from the pruned graph
-* Calculate pruning up to the largest DAG
-* Discretise numerical features
-* Fit the Bayesian Network's probabilistic model
-* Extract predicted conditional probabilities of a node within segments wrt its parents
-* Save results in the output directory
-* Conduct error analysis on multiple models
+- [Introduction](docs/concepts/introduction.md) — methodology overview.
+- [Linear causal discovery](docs/concepts/linear-causal-discovery.md) — NOTEARS and SEMs.
+- [Non-linear causal discovery (deep dive)](docs/for-statisticians/nonlinear-causal-discovery-deep-dive.md) — NOTEARS-MLP and distribution types.
+- [Bayesian networks](docs/concepts/bayesian-networks.md) and [estimation deep dive](docs/concepts/bayesian-networks-estimation.md).
+- [Interventions and counterfactuals](docs/concepts/interventions-counterfactuals.md) and [deep dive](docs/concepts/interventions-counterfactuals-deep-dive.md).
 
-For a comprehensive explanation on Causal Discovery, Bayesian Network and Do-why inference within the scope of this
-tool please direct in:
-
-* [1. Causal Canvas Introduction](https://github.com/Playtika/causal_canvas/wiki/1.-Causal-Canvas-Introduction)
-* [2. Linear Causal Discovery](https://github.com/Playtika/causal_canvas/wiki/2.-Linear-Causal-Discovery)
-* [3. Non‐linear Causal Discovery](https://github.com/Playtika/causal_canvas/wiki/3.-Non%E2%80%90linear-Causal-Discovery)
-* [4. Bayesian Networks Estimation](https://github.com/Playtika/causal_canvas/wiki/4.-Bayesian-Networks-Estimation)
-* [5. Interventions and counterfactuals for decision making](https://github.com/Playtika/causal_canvas/wiki/5.-Interventions-and-counterfactuals-for-decision-making)
+The vendored NOTEARS code originates from [`causalnex`](https://causalnex.readthedocs.io/en/latest/index.html#) (Apache-2.0, archived upstream). Bayesian-network fitting and inference are provided by [`pgmpy`](https://pgmpy.org); optional causal-effect estimation by [`DoWhy`](https://www.pywhy.org/dowhy/) (`pip install causal-canvas[dowhy]`). See [ADR-0001](docs/adr/0001-causalnex-migration.md).
 
 ## Code structure
 
 Source code
 
 ```text
-├── docs                                                  <- Documentation.
-│   │   └── config.yaml                                   <- Dummy experiment configuration.
-├── causal_canvas                                         <- Directory of the source code.
-│   ├── bayesian_network_estimator.py                     <- Bayesian Network fitting class.
-│   ├── custom_no_tears_mlp.py                            <- Class of Non-linear causal discovery with MLP.
-│   ├── inference_utils.py                                <- Utilities functions for do why inference.
-│   ├── evaluation_utils.py                               <- Utilities functions for error analysis.
-│   ├── nonlinear_notears.py                              <- Utilities functions for running non-linear discovery.
-│   ├── preprocessor.py                                   <- Data preprocessing code.
-│   ├── script_config.py                                  <- Configurator.
-│   ├── script_config_evaluation.py                       <- Configurator for error analysis.
-│   ├── script_config_inference.py                        <- Configurator for dowhy inference.
-│   ├── structure_learner.py                              <- Causal discovery class with NO-TEARS algorithm
-│   └── utils.py                                          <- Utilities functions.
-├── evaluate_experiments.py                               <- Python script to execute for error analysis.
-├── infer_bayesian_network.py                             <- Python script to execute for causal discovery and Bayesian Network fitting.
-├── infer_do_why.py                                       <- Python script to execute for do why inference on known structure and bayesian network.
-├── repeat_experiments.py                                 <- Python example script to execute for multiple model trials.
-├── requirements.txt                                      <- Python libraries requirements for the script to run.
-└── README.md                                             <- Info causal inference tool and how to use it.
+├── causal_canvas                       <- Source package.
+│   ├── __init__.py                     <- Curated public API.
+│   ├── bayesian_network.py             <- pgmpy-backed discrete BN (CPT fit, predict).
+│   ├── bayesian_network_estimator.py   <- Bayesian Network fitting class.
+│   ├── custom_distributions/           <- Distribution types for non-linear NOTEARS.
+│   ├── custom_notears_mlp.py           <- Low-level NOTEARS-MLP solver.
+│   ├── effect_estimation.py            <- Optional DoWhy effect estimation.
+│   ├── evaluation_utils.py             <- Error-analysis helpers.
+│   ├── inference_engine.py             <- Exact marginals + do() interventions (pgmpy).
+│   ├── inference_utils.py              <- Do-why inference helpers.
+│   ├── nonlinear_notears.py            <- High-level non-linear-NOTEARS API.
+│   ├── preprocessor.py                 <- Data preprocessing.
+│   ├── py.typed                        <- PEP 561 type marker.
+│   ├── script_config.py                <- Pydantic config schema.
+│   ├── structure_learner.py            <- Causal discovery (linear + non-linear NOTEARS).
+│   ├── utils.py                        <- Shared utilities.
+│   └── vendored/                       <- NOTEARS / discretisers / plots owned in-tree (from causalnex, Apache-2.0).
+├── data/                               <- Example input data.
+├── docs/                               <- Documentation site source.
+├── examples/                            <- Example scenarios (configs + per-scenario READMEs).
+├── images/                             <- Diagrams and figures.
+├── notebooks/                          <- Jupyter notebooks.
+├── tests/                              <- Pytest test suite.
+├── evaluate_experiments.py             <- Entry point → console script `evaluate-experiments`.
+├── infer_bayesian_network.py           <- Entry point → console script `infer-bn`.
+├── infer_do_why.py                     <- Entry point → console script `infer-dowhy`.
+├── iterate_structure_learning.py       <- Entry point → console script `iterate-structure-learning`.
+├── repeat_experiments.py               <- Entry point → console script `repeat-experiments`.
+├── pyproject.toml                      <- Package metadata + tooling config.
+├── poetry.lock                         <- Locked dependency versions.
+├── tox.ini                             <- Tox environments (test, lint).
+├── .pre-commit-config.yaml             <- Pre-commit hooks.
+└── README.md                           <- This file.
 ```
 
-## Causal Discovery and Bayesian Network Fitting
+## Install
 
-### Configuration file for Causal Discovery and modelling
+Causal Canvas uses [Poetry](https://python-poetry.org/) for dependency management. Python 3.10, 3.11 or 3.12 is required.
 
-The configuration file should respect the following structure.
-Examples of config files are also at ```lausanne_player_360/scripts/causal_inferences/docs/config.yaml```.
-
-* ```config.yaml```
-  * ```validation_dates```: date range of validation set to split the data before preprocessing
-  * ```data_input_path```: path of the input dataset, e.g. "path/data.parquet"
-  * ```structure_path```: path of an already learnt structure, e.g. "path/DAG.dot". If not specified, it runs causal discovery and output that structure. If provided, discovery is not conducted and uses the given structure for Bayesian network inference.
-  * ```id_column```: name indicating id column, e.g. user_id
-  * ```date_column```: name indicating date column, e.g fs_calc_date
-  * ```event_column```: name indicating event column, e.g churn
-  * ```drop_columns```: columns to drop, e.g. ["age", "school"]
-  * ```features_select```: features to be selected for modelling
-  * ```categorical_features```: categorical features to be separated during data scaling
-  * ```tabu_edges```: list of lists with directional causal effects that cannot happen. First position of sublist should
-    point to F1 -> F2, i.e., ["G2", "Fedu"] indicates that `G2` cannot cause `Fedu`
-  * ```tabu_edge_features```: lift of features that cannot be inflicted by the rest of features, e.g. `Fedu`
-  * ```event_graph_label```: label to be shown for the node for target column, i.e., CHURN, WILL_SINK etc. Can type either colour
-    is CSS or a name, e.g., `black` etc.
-  * ```event_color```: colour of the node for target column
-  * ```higher_contribution_feature_color```: colour of node for the feature with highest causal impact to target
-  * ```invert_signs```: Boolean indicating whether the edges signs should be reverted visually for better interpretation. Default is False.
-  * ```sample_frac```: float between 0 and 1 to perform the modelling and analysis on a sample of the data.
-  * ```h_tol```: exit if h(W) < h_tol (as opposed to strict definition of 0) in NOTEARS
-  * ```max_iter```: max number of dual ascent steps during optimisation in NOTEARS.
-  * ```w_threshold```: fixed threshold for absolute edge weights to prune the graph in NOTEARS.
-  * ```lasso_multiplier```: if selected, constant that multiplies the lasso term in Linear NOTEARS.
-  * ```connections_type``` : whether to use "linear" or "non_linear" Causal Discovery.
-  * ```non_linear_args```: If this dictionary arguments are passed, then they are considered to conduct non-linear Causal Discovery.
-      -```feature_to_distribution_map```: Dictionary with mapping of a feature to a distribution. Distribution values can be
-          "bin" for binary, "cat" for Multinomial/Categorical, "cont" for Gaussian, "pos_cont" for non-negative defined Gaussian,
-    "bimodal_pos_cont": Mixture of two non-negative defined Gaussian (currently on testing), "ord" for Ordinal distribution,
-    "poiss" for Poisson distribution, "gamma": for gamma distribution and "tweedie" for tweedie distribution, currently applied for scale factor = 1.5.
-    * ```ridge_multiplier```: if selected, constant that multiplies the ridge term in MLP.
-    * ```lasso_multiplier```: if selected, constant that multiplies the lasso term in MLP.
-    * ```use_bias```: True to add the intercept to the model. Default is set to false.
-    * ```hidden_layer_units```: An iterable where its length determine the number of layers used,  and the numbers determine the number of nodes used for the layer in order.
-    * ```use_gpu```: use gpu if it is set to True and CUDA is available
-    * ```verbose```: True to print the loss, h and rho during dual ascent steps.
-  * ```discretiser```: dictionary with two arguments
-    * ```method```: it can be either `simple`, i.e., simple quantile split discretisation), `tree`, i.e., Decision
-    Trees where the cutting points on the Decision Tree become
-    the chosen discretisation thresholds or `mdlp` algorithm (Fayyad and Irani, 1993) where dynamic split strategy based
-    on binning the number of candidate splits is implemented to increase efficiency
-    (Chickering, Meek and Rounthwaite, 2001).
-    * ``argument``: for `simple` discretiser reflects the number of quantile splits for the
-        features. For `tree` discretiser reflects the maximum tree depth. For `mdlp` discretiser is the minimum split value.
-    * ``proportion_threshold``: for post-processing the segments that are created with discretisation. It should be a number
-        between 0 and 1. Basically it will merge each category that is less than ``proportion_threshold`` with the previous one. Default is `None`.
-    * ``max_categories``: number of maximum categories to have post discretisation. Default is set to `None`.
-    * ``discretisation_cutoffs_target``: list of cutoffs to be used for a numeric target during bayesian network inference, i.e.,
-     if value is given as `[0]` it will create a binary target from `(-inf, 10)`, `[10, inf)`, if value is given as `[0, 10]`
-     it will create three categories etc.
-  * ```inference_method```: dictionary with method and arguments for fitting the model.
-    * ```method```: `MaximumLikelihoodEstimator` or `BayesianEstimator`
-    * ```bayes_prior```: only if `BayesianEstimator` is chosen, it can be `K2` or `BDeu`
-    * ```equivalent_sample_size```: used only with `BDeu` to tune the prior quantity
-          `equivalent_sample_size / (node_cardinality * np.prod(parents_cardinalities))`
-  * `conditional_dependency_estimates`: nodes for which we want to extract the conditional dependencies wrt to its parents. It can be `churn_label`, `is_active`, etc.
-  * `create_new_folder`: whether it should create a new folder or rewrite
-  * `add_datetime_to_folder`: whether to add datetime in folder. Useful if multiple experiments are being run.
-  * ```output_path```: path of the output results dataset, e.g. "/mnt/VAST_SHARED/"
-
-### Causal Discovery Usage
-
-Create environment with conda:
-
-```commandline
-conda create --name <env name> python=3.10
-conda activate <env name>
-pip install -r requirements.txt
-```
-
-Create environment with poetry:
-
-```commandline
-poetry config virtualencs.in-ptoject True
+```bash
+poetry config virtualenvs.in-project true
 poetry install
 ```
 
-Run the following command line to execute the tool. Be careful to choose the right config file according to the specific task (either "regularised", "simple").
+## Command-line reference
 
-Run main scripts in conda environment:
+`poetry install` exposes five console scripts that cover the primary workflows:
 
-```commandline
-$ python3 infer_bayesian_network.py --config_file CONFIG_FILE
-argument:
-    --config_file CONFIG_FILE
-                        configuration path of the specific process to run
+| Command | Purpose |
+|---|---|
+| `infer-bn` | Run causal discovery + Bayesian-network fit against a config. |
+| `infer-dowhy` | Do-calculus inference (interventions, counterfactuals, ATE) on a fitted Bayesian network. |
+| `evaluate-experiments` | Error analysis across a set of trained models. |
+| `repeat-experiments` | Loop multiple causal-discovery + BN trainings across config variations. |
+| `iterate-structure-learning` | Sweep structure-learning hyperparameters across a grid. |
+
+### Common flags
+
+Entry points are wired through [Fire](https://github.com/google/python-fire), so every function argument is also a CLI flag.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config_file PATH` | *required* | YAML config for the run. Schemas differ per command — see the Configuration sections below. |
+| `--debug` | `False` | Log the full parsed config on startup. Defaults to a compact summary (`event=… data=… output=…`). Available on `infer-bn` and `infer-dowhy`. |
+
+### Examples
+
+Run causal discovery + BN fit on the bundled student-grades example:
+
+```bash
+poetry run infer-bn --config_file examples/students/config.yaml
 ```
 
-e.g.
+Do-calculus inference against a fitted model:
 
-```commandline
-python3 infer_bayesian_network.py --config_file path/config.yaml
+```bash
+poetry run infer-dowhy --config_file examples/students/config_inference.yaml
 ```
 
-Run main scripts with poetry:
+Error analysis across multiple trained models:
 
-```commandline
-$ poetry run python infer_bayesian_network.py --config_file CONFIG_FILE
-argument:
-    --config_file CONFIG_FILE
-                        configuration path of the specific process to run
+```bash
+poetry run evaluate-experiments --config_file examples/students/config_evaluation.yaml
 ```
 
-e.g.
+Override the Playtika-default dataset paths in `repeat-experiments`:
 
-```commandline
-poetry run python infer_bayesian_network.py --config_file path/config.yaml
+```bash
+poetry run repeat-experiments \
+  --segments_path /other/path/segments_ \
+  --structures_path /other/path/structures/
 ```
 
-Experiment results
+The entry-point scripts are also runnable as modules (`poetry run python infer_bayesian_network.py --config_file …`). The console-script form is shorter and doesn't depend on the current working directory.
+
+## Use as a Python library
+
+The top-level package exposes a curated API:
+
+```python
+from causal_canvas import (
+    BayesianNetworkEstimator,
+    InferenceMethod,
+    Preprocessor,
+    StructureLearner,
+)
+```
+
+The wheel ships with a `py.typed` marker, so `mypy` and editors pick up full type information from `causal_canvas` without configuration.
+
+A minimal end-to-end sketch, mirroring what `infer-bn` does internally:
+
+```python
+import pandas as pd
+from causal_canvas import Preprocessor, StructureLearner
+
+df = pd.read_parquet("data/my_features.parquet")
+
+preprocessor = Preprocessor(
+    df=df,
+    event_col="churn",
+    date_col="fs_calc_date",
+    drop_columns=[],
+    categorical_columns=["country", "platform"],
+)
+preprocessed = preprocessor.preprocess()
+
+learner = StructureLearner(
+    X=preprocessed,
+    event_col="churn",
+    connections_type="linear",
+    max_iter=10_000,
+    h_tol=1e-4,
+    w_threshold=0.8,
+    tabu_edges=[],
+)
+learner.discover_dag(path="./out/causal_discovery")
+```
+
+See `infer_bayesian_network.py` for the full reference driver (Bayesian-network fit, output plotting, conditional-dependency extraction).
+
+## Security
+
+Causal Canvas handles two asset types with inherent risk: pickled model files (Bayesian networks, discretisers) and subprocess invocations (when `repeat-experiments` or `iterate-structure-learning` spawn further training jobs). This section documents the guarantees and the limits.
+
+### Loading saved models safely
+
+Bayesian-network and discretiser checkpoints are persisted with `pickle`. Pickle deserialisation **executes arbitrary Python** — the format is not safe for untrusted input.
+
+Causal Canvas routes every load through `causal_canvas.utils.safe_pickle_load`, which:
+
+- Resolves the file path and refuses to load anything outside a *trusted root* (`Path.cwd()` by default). Paths like `../../etc/bad.pkl` are rejected with a `ValueError`.
+- Logs a SHA-256 prefix of the loaded bytes before deserialising so tampering with a file that was produced in a prior run leaves a trail in the logs.
+
+This limits the blast radius of a misconfigured config file that points `model_path` at a surprise location. It does **not** make pickle itself safe — only load checkpoints produced by trusted runs. If you receive a `.pkl` from a third party, don't feed it to `infer-dowhy` without inspecting its contents first.
+
+### No shell injection in experiment runners
+
+`repeat-experiments` and `iterate-structure-learning` spawn child processes to run individual trainings. Both use `subprocess.check_call([sys.executable, script, ...])` with argv lists — never `shell=True`. Config values passed as command-line arguments are not interpolated into a shell string, so a malicious config file can't smuggle shell commands through.
+
+### Supply-chain auditing
+
+Known CVEs in the dependency tree are scanned with [pip-audit](https://github.com/pypa/pip-audit):
+
+```bash
+tox -e audit
+```
+
+Findings are **non-blocking** today: the `causalnex` pin chain (`torch==2.2.1`, `pyarrow==15.0.0`) was removed in 0.2.0, so remaining advisories are in dev tooling. See [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) for the current triage, the upgrade blockers, and the process for new findings.
+
+### Reporting a vulnerability
+
+Please contact the maintainers privately rather than opening a public issue. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for reporting guidance.
+
+## Causal Discovery and Bayesian Network Fitting
+
+### Configuration
+
+The full configuration schema for `infer-bn` (data and I/O, causal-discovery hyperparameters, non-linear NOTEARS arguments, discretisation, Bayesian-network inference, visualisation) is documented in [docs/reference/config.md](docs/reference/config.md), grouped by pipeline stage with one table per group.
+
+A bundled example lives at [`examples/students/config.yaml`](examples/students/config.yaml). Each example folder under `examples/` ships a `README.md` describing the scenario and the commands to reproduce its outputs.
+
+### Experiment results
 
 ```text
 └── experiment                                                <- Directory for the experiment results.
     ├── causal_discovery                                      <- Directory for the causal discovery.
     │   ├── 01_fully_connected_graph.html                     <- HTML file with interactive fully connected graph with or without lasso.
     │   ├── 02_largest_subgraph.html                          <- HTML file with interactive largest subgraph.
-    │   ├── 03_threshold_graph.html                           <- HTML file with prunned graph.
+    │   ├── 03_threshold_graph.html                           <- HTML file with pruned graph.
     │   ├── 04_threshold_DAG.html                             <- HTML file with resulting DAG after pruning.
-    │   ├── 05_DAG_subgraph.html                              <- HTML file with largest subgraph of the prunned DAG.
+    │   ├── 05_DAG_subgraph.html                              <- HTML file with largest subgraph of the pruned DAG.
     │   ├── label_encoder.pkl                                 <- Label encoder for categorical variables.
     │   ├── DAG_for_inference.dot                             <- Structured DAG networkx class to use for inference.
     │   ├── scaler.pkl                                        <- Scaler for numerical variables.
@@ -198,8 +232,8 @@ Experiment results
     │   ├── threshold_std_error_weights_mlp.csv               <- If MLP is chosen, resulting s.e. of weight matrix after hard threshold.
     │   ├── all_weights_heatmap.png                           <- If MLP is chosen, heatmap weight matrix and target weights after hard threshold.
     │   ├── all_weights_w_threshold_heatmap.png               <- If MLP is chosen, heatmap of weight matrix and target weights after hard threshold.
-    │   ├── score_edges_full_structure.yaml                   <- Weights of structural causal relationships for the full sctructure with or without lasso.
-    │   └── score_edges_sparser_structure.yaml                <- Weights of structural causal relationships for the sparser sctructure with or without lasso.
+    │   ├── score_edges_full_structure.yaml                   <- Weights of structural causal relationships for the full structure with or without lasso.
+    │   └── score_edges_sparser_structure.yaml                <- Weights of structural causal relationships for the sparser structure with or without lasso.
     ├── bayesian_network                                      <- Directory for the bayesian_network probabilistic modelling.
     │   ├── dependency_estimates                              <- Directory with node specific CPD wrt to its parents
     │   │   ├── node_name.csv                                 <- CSV with node specific CPD wrt to its parents.
@@ -208,7 +242,7 @@ Experiment results
     │   │   ├── bayesian_network.pkl                      <- Bayesian Network model class
     │   │   ├── quantile_splits.json                      <- Dictionary with numerical splits by feature as decided by the discretiser
     │   │   ├── discretiser.pkl                           <- Discretiser model class if `tree` or `mdlp` is used
-    │   │   └── condenced_splits.json                     <- Dictionary with numerical splits by feature as decided by post-processing with condensing categories
+    │   │   └── condensed_splits.json                     <- Dictionary with numerical splits by feature as decided by post-processing with condensing categories
     └── config.yaml                                       <- Configuration file.
 
 ```
@@ -240,48 +274,14 @@ the optimized threshold obtained from the optimization set.
 These predictions are also stored in CSV files. Like before, there's a CSV file and a plot with bootstrap estimated
 scores for all models, allowing you to assess model performance on the test set.
 
-The configuration file should respect the following structure.
-Example of config file ```lausanne_player_360/scripts/causal_inferences/docs/config_evaluation.yaml```.
-
-* ```config_evaluation.yaml```
-  * ```data_train_input_path```: list of path(s) of the input dataset(s), e.g. "path/data.parquet". It can work for datasets that share the same preffix path, i.e., for pre-segmented datasets.
-  * ```data_test_input_path```: list of path(s) of the test input dataset(s), e.g. "path/data.parquet". It can work for datasets that share the same preffix path, i.e., for pre-segmented datasets.
-  If not specified, the it is assumed that test data is integrated with train data and optim_test_dates and test_dates need to be provided.
-  * ```event_column```:
-    * ```name``` indicating event column, e.g. `churn`, `G1`
-    * ```target_type```: if `cont` then it doesn't do any categorical transformations prior to discretisation.
-    * ```target_column_names_cpds```: list of bins created by bayesian network. They can be found via dependency_estimates
-    extracted by Bayesian Network inference, e.g., `["[-inf, 10)", "[10, inf)"]`.
-    * ```target_class```: "[10, inf)": desired target/minority class, i.e., if target is `churn` then we can specify `True`
-    or `1`, if target is G3 from student data example, our target class is passing the exam, i.e., `"[10, inf)"]`.
-  * ```date_column```: name indicating date column if needed, e.g `date`
-  * ```optim_test_dates```: dates within the dataset to optimise the threshold on if needed, e.g `date`.
-  * ```test_dates```: dates within the dataset to evaluate the model on after the threshold optimisation if needed, e.g `date`.
-  * ```features_select```: features that were used for modelling
-  * ```all_models_path```: prefix path of folder that includes all models, e.g., /mnt/VAST_SHARED/churn/all_models/
-  * ```inference_methods```: list with all inference methods that the user wants to evaluate, i.e, [`mle`, `k2_prior`]. They represent the model subfolder within all_models_path, i.e. all_models_path/inference_method_path/
-  * ```models_combinations```: dictionary including all the discretisation combinations that the user wants to evaluate. It represents the second downstream folder from models_path, i.e., `{'tree': [1, 2]}` maps to folders all_models_path/inference_method_path/tree_1 and all_models_path/inference_method_path/tree_2
-  * ```score_to_optimise```: which score to optimise the threshold on. It can only be `f1-score`, `precision` or `recall`. If not specified then 50% threshold is used by default for the evaluation.
-  * ```boot_iterations```: integer indicating the bootstrap iterations for the score calculations.
-  * ```alpha```: the quantiles to extract with bootstrap.
-  * ```use_multiprocessing```: if true, it uses multiprocessing to split the test sets in order to conduct the predictions.
-  * ```output_path```: path of the output results dataset, e.g. "/mnt/VAST_SHARED/"
+The full schema for `evaluate-experiments` is documented in [docs/reference/config.md](docs/reference/config.md#evaluate-experiments-configuration). A bundled example lives at [`examples/students/config_evaluation.yaml`](examples/students/config_evaluation.yaml).
 
 ### Error Analysis Usage
 
-Run the following command line to execute the error analysis tool.
+Run the `evaluate-experiments` console script:
 
-```commandline
-$ python3 evaluate_experiments.py --config_file CONFIG_FILE
-argument:
-    --config_file CONFIG_FILE
-                        configuration path of the specific process to run
-```
-
-e.g.
-
-```commandline
-python3 evaluate_experiments.py --config_file path/config_evaluation.yaml
+```bash
+poetry run evaluate-experiments --config_file examples/students/config_evaluation.yaml
 ```
 
 Error analysis results
@@ -319,41 +319,15 @@ Error analysis results
 
 ## Do-why inference tool
 
-This script performs Do-Why Bayesian Network inference based on a configuration file that defines various aspects
-of the inference process. It is designed to analyze and understand causal relationships within a dataset using
-probabilistic graphical models. The script leverages the CausalNex library for efficient Bayesian Network
-manipulation and inference.
+The `infer-dowhy` console script performs do-calculus Bayesian-network inference against a fitted model: marginals, interventions, counterfactuals, and ATE. The full schema for `config_inference.yaml` is documented in [docs/reference/config.md](docs/reference/config.md#infer-dowhy-configuration). A bundled example lives at [`examples/students/config_inference.yaml`](examples/students/config_inference.yaml).
 
-The script will perform Bayesian Network inference based on the provided configuration file,
-analyzing causal relationships, calculating marginals, conducting interventions,
-and generating various visualizations and output files.
+For the conceptual difference between observational, interventional, and counterfactual queries, see [docs/concepts/interventions-counterfactuals.md](docs/concepts/interventions-counterfactuals.md).
 
-For more details on the script's functionality, refer to the inline comments
-and the detailed docstring provided within the script.
+```bash
+poetry run infer-dowhy --config_file examples/students/config_inference.yaml
+```
 
-The configuration file should respect the following structure.
-Examples of config files are also at ```lausanne_player_360/scripts/causal_inferences/docs/config_inference.yaml```.
-
-* ```config_inference.yaml```
-  * ```event_column```: name indicating event column, e.g churn.
-  * ```target_class```: "[10, inf)": desired target/minority class, i.e., if target is `churn` then we can specify `True`
-    or `1`, if target is G3 from student data example, our target class is passing the exam, i.e., `"[10, inf)"]`. The
-    class specified will be the target class when estimating ATEs.
-  * ```model_path```: path indicating where the BayesianNetwork class can be loaded.
-  * ```conditionals```: dictionary to get conditional marginal distributions. i.e. `churn`: [`is_active`, `level_end`]
-  translates to the conditional probabily distribution `P(churn|is_active, level_end)`, which means that any other direct
-  effects towards churn are being marginalised out.
-    * ```interventions```: dictionary mapped on a feature with probability shifts for each category. We can have assign multiple
-  interventions, i.e., an intervention on `level_end` under the name `low_leveling` gives more probability/weight towards
-  having more low level users in the game. Since the discretiser during inference in our example created three bins for
-  `level_end` and all bins are ordered, we will put more probability on the first bin, i.e. `{0: 0.7, 1: 0.2, 2: 0.1}` etc.
-  Or we can pick a single intervention such that with `impressed_popups_count` giving more probability towards less popus, i.e.
-  `{0: 0.7, 1: 0.3}` is a `do_intervention('X', {'x': 0.7, 'y': 0.3})` will set :math:`P(X=x)` to 0.7, and :math:`P(X=y)` to 0.3.
-  For now the tool resets the probabilities after each intervention. In the future we will extend
-  the tool to incorporate combination of interventions, i.e. changing `level_end` and `impressed_popups_count` on the same
-  time.
-  * `counterfactuals`: list with features to calculate counterfactuals and ATE. `do_intervention('X', 'x')` will set :math:`P(X=x)` to 1, and :math:`P(X=y)` to 0
-  * ```output_path```: path of the output results dataset, e.g. "/mnt/VAST_SHARED/"
+> :warning: **Security**: `config_inference.yaml`'s `model_path` is loaded via `safe_pickle_load`, which restricts the load path to a trusted root and logs a SHA-256 prefix of the bytes before deserialising. See the [Security section](#security) above.
 
 ## Author
 

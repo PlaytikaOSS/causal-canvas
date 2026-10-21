@@ -59,9 +59,7 @@ def script_config_dict(tmp_path) -> dict:
 
 def test_load_yaml(tmp_file):
     # Arrange
-    tmp_file.write_text(
-        yaml.dump({"data_input_path": "data.csv", "output_path": "output"})
-    )
+    tmp_file.write_text(yaml.dump({"data_input_path": "data.csv", "output_path": "output"}))
 
     # Act
     config = YamlConfig.load_yaml(tmp_file)
@@ -72,9 +70,7 @@ def test_load_yaml(tmp_file):
 
 def test_load_yaml_str(tmp_file):
     # Arrange
-    tmp_file.write_text(
-        yaml.dump({"data_input_path": "data.csv", "output_path": "output"})
-    )
+    tmp_file.write_text(yaml.dump({"data_input_path": "data.csv", "output_path": "output"}))
 
     # Act
     config = YamlConfig.load_yaml(str(tmp_file))  # type: ignore
@@ -128,7 +124,7 @@ def test_script_config_default_values(tmp_file, script_config_dict, key, default
     tmp_file.write_text(yaml.dump(a_dict))
 
     # Act
-    sc = ScriptConfig.load_yaml(tmp_file).dict()
+    sc = ScriptConfig.load_yaml(tmp_file).model_dump()
 
     assert sc[key] == default_value
 

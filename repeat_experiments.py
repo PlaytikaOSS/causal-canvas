@@ -13,46 +13,57 @@ sub-folder is matched to a single method and parameter.
 
 import glob
 import subprocess
+import sys
 
 import yaml
 from loguru import logger
 
+# Default dataset locations for Playtika's internal environment. Override via
+# CLI args when running outside that infra.
+DEFAULT_SEGMENTS_PATH = (
+    "/mnt/VAST_SHARED/lausanne_ds/player360/clustering"
+    "/bb/player_360_bb_20230125/data/player_360_bb_20230125_"
+)
+DEFAULT_STRUCTURES_PATH = (
+    "/mnt/VAST_SHARED/lausanne_ds/player360/experiment_results"
+    "/bb/bb_bayesian_network/churn/14_features/"
+)
 
-def iterate_causal_inference():
+
+def iterate_causal_inference(
+    segments_path: str = DEFAULT_SEGMENTS_PATH,
+    structures_path: str = DEFAULT_STRUCTURES_PATH,
+):
     """
-    This function demonstrates the process of performing causal inference using
-    various methods, such as simple discretization, trees, and MDLP, on multiple
-    segmented datasets. The script is designed to be adaptable to different use cases.
+    Run causal inference on multiple segmented datasets across a grid of
+    discretisation methods and arguments.
 
-    It reads configuration parameters from the 'docs/config.yaml' file and iterates
-    through different discretization methods and their corresponding arguments.
-    For each combination, causal inference is performed, and the results are saved
-    in specific output paths based on the dataset segments.
+    Reads configuration parameters from ``docs/config.yaml`` and iterates
+    through different discretisation methods. Results are saved in subfolders
+    under ``config["output_path"]`` keyed by segment, method and parameter.
+
+    Parameters
+    ----------
+    segments_path : str
+        Filename prefix (not a directory) for the segment parquet files.
+        The script globs ``{segments_path}cluster*`` to enumerate segments.
+        Defaults to the Playtika-internal path.
+    structures_path : str
+        Root directory containing a ``segments/segment_{i}/causal_discovery/
+        DAG_for_inference.dot`` tree. Defaults to the Playtika-internal path.
     """
 
     # Load configuration from the YAML file
-    with open("docs/config.yaml", "r") as f:
+    with open("docs/config.yaml") as f:
         config = yaml.safe_load(f)
 
-    #  Define discretization options for different methods
+    # Define discretization options for different methods
     discretiser = {"simple": [2, 3, 4], "tree": [2, 3, 4, 5], "mdlp": [5, 6, 10]}
-
-    # Define the path to the segmented datasets
-    segments_path = (
-        "/mnt/VAST_SHARED/lausanne_ds/player360/clustering"
-        "/bb/player_360_bb_20230125/data/player_360_bb_20230125_"
-    )
 
     # Get paths to all segmented clusters
     all_cluster_paths = glob.glob(segments_path + "cluster*", recursive=True)
-    # all_cluster_paths = ["/mnt/VAST_SHARED/lausanne_ds/player360/data/player_360_bb_20230125.parquet"]
-    # all_cluster_paths = ["/mnt/VAST_SHARED/lausanne_ds/player360/data/player_360_20230125_non_zero_flags.parquet"]
-    # all_cluster_paths = ["/mnt/VAST_SHARED/lausanne_ds/player360/data/player_360_20230125_non_zero_flags_only_vips.parquet"]
 
     output_path = config["output_path"]
-
-    structures_path = "/mnt/VAST_SHARED/lausanne_ds/player360/experiment_results/bb/bb_bayesian_network/churn/14_features/"
-    # structures_path = "/mnt/VAST_SHARED/lausanne_ds/player360/experiment_results/bb/bb_bayesian_network/sink/vips/discovered_graphs/20230824/causal_discovery/DAG_for_inference.dot"
 
     # Iterate through each cluster segment
     for i, cluster_path in enumerate(all_cluster_paths):
@@ -60,10 +71,8 @@ def iterate_causal_inference():
             structures_path
             + f"segments/segment_{i}/causal_discovery/DAG_for_inference.dot"
         )
-        # config["structure_path"] = structures_path #+ f"all/causal_discovery/DAG_for_inference.dot"
         config["data_input_path"] = cluster_path
         output_path_seg = output_path + f"segments/segment_{i}/inference/mle/"
-        # output_path_seg = output_path + f"BDeu_5K/"
 
         # Iterate through discretisation methods and arguments
         for k, v in discretiser.items():
@@ -83,11 +92,21 @@ def iterate_causal_inference():
                     yaml.dump(config, outfile, default_flow_style=False)
 
                 # Run the Bayesian network inference script
-                subprocess.call(
-                    f"python3 infer_bayesian_network.py -config_file {config_path}",
-                    shell=True,
+                subprocess.check_call(
+                    [
+                        sys.executable,
+                        "infer_bayesian_network.py",
+                        "-config_file",
+                        config_path,
+                    ]
                 )
 
 
+def main():
+    import fire
+
+    fire.Fire(iterate_causal_inference)
+
+
 if __name__ == "__main__":
-    iterate_causal_inference()
+    main()

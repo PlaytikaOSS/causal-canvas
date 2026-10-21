@@ -13,18 +13,28 @@ from causal_canvas.structure_learner import StructureLearner
 from causal_canvas.utils import restructure_nx_object, save_structure
 
 
-def infer_bayesian_network(config_file: str):
+def infer_bayesian_network(config_file: str, debug: bool = False):
     """
     Parameters
     ----------
     config_file: str
         Path to the config file of the experiments that you want to do
+    debug: bool
+        If True, log the full config on startup. Defaults to False, which
+        logs only identifying fields.
     """
 
     logger.info("Config read")
 
     config = ScriptConfig.load_yaml(config_file)
-    logger.info(config)
+    if debug:
+        logger.info(f"Full config: {config}")
+    else:
+        logger.info(
+            f"Config: event={config.event_column} "
+            f"data={config.data_input_path} "
+            f"output={config.output_path}"
+        )
 
     logger.info("Reading data")
 
@@ -172,8 +182,12 @@ def infer_bayesian_network(config_file: str):
     logger.info("Writing config file")
 
     with (output_path / "config.yml").open("w") as fp:
-        yaml.dump(dict(config), fp)
+        yaml.dump(config.model_dump(), fp)
+
+
+def main():
+    fire.Fire(infer_bayesian_network)
 
 
 if __name__ == "__main__":
-    fire.Fire(infer_bayesian_network)
+    main()

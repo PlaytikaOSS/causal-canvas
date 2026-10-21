@@ -1,23 +1,64 @@
+"""
+Bayesian-network fitting and persistence.
+
+Defines :class:`BayesianNetworkEstimator`, the high-level class that
+takes a learned DAG plus a DataFrame, discretises continuous variables,
+fits CPDs, and persists the fitted state to disk for later inference.
+:class:`InferenceMethod` enumerates the supported CPD-fitting backends.
+
+**Layer**: high-level. This is the second stage of the typical pipeline
+(``Preprocessor`` → ``StructureLearner`` → ``BayesianNetworkEstimator``).
+
+**Relationship to pgmpy / causalnex**: the network itself is
+:class:`causal_canvas.bayesian_network.BayesianNetwork` (pgmpy-backed); the
+discretisers (``Discretiser``, ``DecisionTreeSupervisedDiscretiserMethod``,
+``MDLPSupervisedDiscretiserMethod``) are vendored from causalnex under
+:mod:`causal_canvas.vendored.discretiser`. Fitted state is persisted via
+``pickle`` and loaded back through
+:func:`causal_canvas.utils.safe_pickle_load` so the trust boundary is
+explicit (see the Security section in the project README).
+
+See also
+--------
+:mod:`causal_canvas.structure_learner` — produces the DAG consumed here.
+:mod:`causal_canvas.inference_utils` — consumes the fitted estimator.
+:func:`causal_canvas.utils.safe_pickle_load` — trusted-root unpickler.
+"""
+
 import json
 import pickle
 from pathlib import Path
-from typing import Any, List, Literal, Optional
+from typing import Annotated, Literal, Optional
 
+import networkx as nx
 import numpy as np
 import pandas as pd
-from causalnex.discretiser import Discretiser
-from causalnex.discretiser.abstract_discretiser import (
+from loguru import logger
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from causal_canvas.bayesian_network import BayesianNetwork
+from causal_canvas.utils import safe_pickle_load
+from causal_canvas.vendored.discretiser import Discretiser
+from causal_canvas.vendored.discretiser.abstract_discretiser import (
     AbstractSupervisedDiscretiserMethod,
 )
-from causalnex.discretiser.discretiser_strategy import (
+from causal_canvas.vendored.discretiser.discretiser_strategy import (
     DecisionTreeSupervisedDiscretiserMethod,
     MDLPSupervisedDiscretiserMethod,
 )
-from causalnex.network import BayesianNetwork
-from loguru import logger
-from pydantic import BaseModel, Field, confloat, conint, validator
 
 DISCRETISER_METHODS = Literal["simple", "tree", "mdlp"]
+
+# Trust model for serialized artefacts
+# ------------------------------------
+# This module both produces (via ``pickle.dump``) and consumes (via
+# ``pickle.load``) fitted discretisers / fitted BN models. Pickle executes
+# arbitrary Python at load time, so any file loaded here must be treated as
+# trusted code. Load paths are validated against the current working
+# directory via ``safe_pickle_load`` so a malicious path outside the project
+# is rejected; but note this only stops path-traversal, not tampering with
+# a file inside the trusted root. A SHA-256 prefix is logged on every load
+# so tampering with a prior-run artefact leaves a trail in the log output.
 
 
 class InferenceMethod(BaseModel):
@@ -30,7 +71,7 @@ class BayesianNetworkEstimator(BaseModel):
     """
     This class instatiates and fits a Bayesian network on a
     predefined network structure.
-    Bayesian Networks in CausalNex support only discrete distributions.
+    Discrete Bayesian networks support only discrete distributions.
     Any continuous features, or features with a large number of categories,
     should be discretised prior to fitting the Bayesian Network.
     Models containing variables with many possible values will typically be badly fit,
@@ -54,8 +95,8 @@ class BayesianNetworkEstimator(BaseModel):
 
     Parameters
     ----------
-    structural_model: causalnex.structure.structuremodel.StructureModel
-        discovered graph from causalnex library in the form of a DAG
+    structural_model: causal_canvas.vendored.structure_model.StructureModel
+        discovered graph (``StructureModel``) in the form of a DAG
     train_set: pd.DataFrame
         train set to fit the model on
     numerical_features: list
@@ -81,29 +122,29 @@ class BayesianNetworkEstimator(BaseModel):
         features. For `tree` discretiser reflects the maximum tree depth
     """
 
-    structural_model: Any
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    structural_model: nx.DiGraph  # a StructureModel, or any DAG (e.g. read back from .dot)
     train_set: pd.DataFrame
-    numerical_features: List[str]
+    numerical_features: list[str]
     event_col: str
     discretiser_method: DISCRETISER_METHODS
     inference_method: InferenceMethod
-    discretiser_argument: conint(gt=0)
-    proportion_threshold: Optional[confloat(gt=0, le=1)]
+    discretiser_argument: Annotated[int, Field(gt=0)]
+    proportion_threshold: Optional[Annotated[float, Field(gt=0, le=1)]] = None
     split_dictionary: dict = Field(default_factory=dict)
     model: Optional[BayesianNetwork] = None
     discretiser: Optional[AbstractSupervisedDiscretiserMethod] = None
-    condenced_thresholds: dict = Field(default_factory=dict)
-    discretisation_cutoffs_target: List
-    feature_to_distribution_map: Optional[dict] = None
+    condensed_thresholds: dict = Field(default_factory=dict)
+    discretisation_cutoffs_target: list
+    feature_to_distribution_map: Optional[dict[str, str]] = None
     cat_encoding_mappings: Optional[dict] = None
-    max_categories: Optional[int]
+    max_categories: Optional[int] = None
 
-    @validator("discretisation_cutoffs_target", pre=True)
+    @field_validator("discretisation_cutoffs_target", mode="before")
+    @classmethod
     def set_discretisation_cutoffs_target_default(cls, v):
         return [] if v is None else v
-
-    class Config:
-        arbitrary_types_allowed = True
 
     def discretise_data(self, path: Path):
         """
@@ -132,9 +173,7 @@ class BayesianNetworkEstimator(BaseModel):
         ]
 
         if self.discretiser_method == "simple":
-            X_train_transformed = self._simple_discretise(
-                features=numerical_features, path=path
-            )
+            X_train_transformed = self._simple_discretise(features=numerical_features, path=path)
         elif self.discretiser_method == "tree":
             X_train_transformed = self._tree_discretise(
                 x=self.train_set, features=numerical_features, path=path
@@ -150,17 +189,13 @@ class BayesianNetworkEstimator(BaseModel):
                 splits={self.event_col: self.discretisation_cutoffs_target},
             )
             self.split_dictionary[self.event_col] = self.discretisation_cutoffs_target
-            self.condenced_thresholds[self.event_col] = (
-                self.discretisation_cutoffs_target
-            )
+            self.condensed_thresholds[self.event_col] = self.discretisation_cutoffs_target
 
         if self.feature_to_distribution_map and "cat" in list(
             self.feature_to_distribution_map.values()
         ):
             multinomial_feats = [
-                feat
-                for feat, dist in self.feature_to_distribution_map.items()
-                if dist == "cat"
+                feat for feat, dist in self.feature_to_distribution_map.items() if dist == "cat"
             ]
 
             X_train_transformed_cats = self.preprocess_categorical_features(
@@ -259,8 +294,8 @@ class BayesianNetworkEstimator(BaseModel):
 
         if self.proportion_threshold:
             x_new = self.get_final_discretisation(x_old=x[features], x_new=x_new)
-            with (model_fit_path / "condenced_splits.json").open("w") as outfile:
-                json.dump(self.condenced_thresholds, outfile)
+            with (model_fit_path / "condensed_splits.json").open("w") as outfile:
+                json.dump(self.condensed_thresholds, outfile)
 
         for k, v in self.discretiser.map_thresholds.items():
             self.split_dictionary.update({k: list(v)})
@@ -314,9 +349,7 @@ class BayesianNetworkEstimator(BaseModel):
         # Fix bug where mdlp does not return any cut points for 'unimportant' features
         for feature in features:
             if len(self.discretiser.map_thresholds[feature]) == 0:
-                self.discretiser.map_thresholds[feature] = np.array(
-                    [np.median(x[features])]
-                )
+                self.discretiser.map_thresholds[feature] = np.array([np.median(x[features])])
 
         x_new = pd.DataFrame(self.discretiser.transform(x))
 
@@ -326,8 +359,8 @@ class BayesianNetworkEstimator(BaseModel):
 
         if self.proportion_threshold:
             x_new = self.get_final_discretisation(x_old=x, x_new=x_new)
-            with (model_fit_path / "condenced_splits.json").open("w") as outfile:
-                json.dump(self.condenced_thresholds, outfile)
+            with (model_fit_path / "condensed_splits.json").open("w") as outfile:
+                json.dump(self.condensed_thresholds, outfile)
 
         for k, v in self.discretiser.map_thresholds.items():
             self.split_dictionary.update({k: list(v)})
@@ -356,15 +389,16 @@ class BayesianNetworkEstimator(BaseModel):
             A mapping of original categories to condensed categories.
         """
         ratios = x_new[feature].value_counts().sort_index() / x_new.shape[0]
-        ratios = ratios.reset_index().rename(
-            columns={"index": "category", feature: "proportion"}
-        )
+        # Column names produced by reset_index() differ between pandas 1.x and 2.x,
+        # so name them positionally.
+        ratios = ratios.rename_axis("category").reset_index()
+        ratios.columns = ["category", "proportion"]
         category_mapping = {}
 
         # Combine categories while ensuring no category has less than 5% counts
         new_category = 0
         count_so_far = 0
-        for index, row in ratios.iterrows():
+        for _index, row in ratios.iterrows():
             count_so_far += row["proportion"]
             if count_so_far >= self.proportion_threshold:
                 category_mapping[row["category"]] = new_category
@@ -417,15 +451,13 @@ class BayesianNetworkEstimator(BaseModel):
                 max_keys[value] = key
 
         merged_to_values_mapping = []
-        for key, value in max_keys.items():
+        for _key, value in max_keys.items():
             value = (
                 int(value)
                 if value < len(self.discretiser.map_thresholds[feature])
                 else int(value) - 1
             )
-            merged_to_values_mapping.append(
-                self.discretiser.map_thresholds[feature][int(value)]
-            )
+            merged_to_values_mapping.append(self.discretiser.map_thresholds[feature][int(value)])
 
         return np.sort(list(set(merged_to_values_mapping)))
 
@@ -444,23 +476,19 @@ class BayesianNetworkEstimator(BaseModel):
             pd.DataFrame
             The final discretised data frame with condensed categories.
         """
-        self.condenced_thresholds = dict()
+        self.condensed_thresholds = dict()
         for feature in self.discretiser.map_thresholds.keys():
             if len(self.discretiser.map_thresholds[feature]) >= 3:
                 category_mapping = self._condense_categories(x_new, feature)
-                self.condenced_thresholds[feature] = self._replace_thresholds(
+                self.condensed_thresholds[feature] = self._replace_thresholds(
                     category_mapping, feature
                 )
             else:
-                self.condenced_thresholds[feature] = self.discretiser.map_thresholds[
-                    feature
-                ]
+                self.condensed_thresholds[feature] = self.discretiser.map_thresholds[feature]
 
         for feature in self.discretiser.map_thresholds.keys():
-            self.condenced_thresholds[feature] = list(
-                self.condenced_thresholds[feature]
-            )
-        x_new = self._known_splits_discretise(x_old, self.condenced_thresholds)
+            self.condensed_thresholds[feature] = list(self.condensed_thresholds[feature])
+        x_new = self._known_splits_discretise(x_old, self.condensed_thresholds)
         return x_new
 
     def _known_splits_discretise(self, x, splits):
@@ -512,19 +540,13 @@ class BayesianNetworkEstimator(BaseModel):
             mapping of values to meaningful intervals
         """
         mapping_dict = (
-            self.condenced_thresholds
-            if self.condenced_thresholds
-            else self.split_dictionary
+            self.condensed_thresholds if self.condensed_thresholds else self.split_dictionary
         )
 
         mapping = {0: f"[-inf, {mapping_dict[feature][0]})"}
         for i in range(len(mapping_dict[feature]) - 1):
-            mapping.update(
-                {i + 1: f"[{mapping_dict[feature][i]}, {mapping_dict[feature][i + 1]})"}
-            )
-        mapping.update(
-            {len(mapping_dict[feature]): f"[{mapping_dict[feature][-1]}, inf)"}
-        )
+            mapping.update({i + 1: f"[{mapping_dict[feature][i]}, {mapping_dict[feature][i + 1]})"})
+        mapping.update({len(mapping_dict[feature]): f"[{mapping_dict[feature][-1]}, inf)"})
         return mapping
 
     def get_node_cpds(self, node, path: Path):
@@ -550,9 +572,7 @@ class BayesianNetworkEstimator(BaseModel):
             dependencies = self.model.cpds[node]
             values_in_node = list(dependencies.index.values)
             dependencies = dependencies.T.reset_index()
-            causal_associated_cols = [
-                c for c in dependencies.columns if c not in values_in_node
-            ]
+            causal_associated_cols = [c for c in dependencies.columns if c not in values_in_node]
             if self.split_dictionary:
                 for col in causal_associated_cols:
                     if col in self.split_dictionary.keys():
@@ -634,33 +654,35 @@ class BayesianNetworkEstimator(BaseModel):
             if spliter_path is None:
                 raise AttributeError("spliter_path cannot be None with `simple` method")
             else:
-                with open(spliter_path, "r") as f:
+                with open(spliter_path) as f:
                     splits = json.load(f)
                 x_new = self._known_splits_discretise(x=X, splits=splits)
         elif method in ["tree", "mdlp"]:
             if spliter_path:
-                with open(spliter_path, "rb") as f:
-                    discretiser = pickle.load(f)
+                discretiser = safe_pickle_load(spliter_path)
                 x_new = discretiser.transform(X)
             elif self.proportion_threshold:
-                x_new = self._known_splits_discretise(
-                    x=X, splits=self.condenced_thresholds
-                )
+                x_new = self._known_splits_discretise(x=X, splits=self.condensed_thresholds)
             else:
+                if self.discretiser is None:
+                    raise RuntimeError(
+                        "discretiser not initialised; call fit_bayesian_network "
+                        "before transforming test data"
+                    )
                 x_new = self.discretiser.transform(X)
         else:
             raise ValueError(f"{method} does not exist")
 
-        if not self.feature_to_distribution_map and "cat" not in list(
-            self.feature_to_distribution_map.values()
-        ):
+        # Fast-exit if there's no categorical preprocessing to do.
+        # NOTE: the previous form used `and` here, which accessed `.values()`
+        # on a potentially-None map when the map was truthy and the first
+        # clause was True. Behaviour-preserving fix: guard against None/empty
+        # up front, then check for "cat".
+        ftdm = self.feature_to_distribution_map
+        if not ftdm or "cat" not in ftdm.values():
             return x_new
         else:
-            multinomial_feats = [
-                feat
-                for feat, dist in self.feature_to_distribution_map.items()
-                if dist == "cat"
-            ]
+            multinomial_feats = [feat for feat, dist in ftdm.items() if dist == "cat"]
 
             X_transformed_cats = self.preprocess_categorical_features_test(x_new)
             return pd.concat(
@@ -681,9 +703,7 @@ class BayesianNetworkEstimator(BaseModel):
         Returns:
             Preprocessed DataFrame X.
         """
-        X_processed = (
-            X.copy()
-        )  # Make a copy to prevent overwriting the original DataFrame
+        X_processed = X.copy()  # Make a copy to prevent overwriting the original DataFrame
         self.cat_encoding_mappings = {}
         for feat in categorical_features:
             # Perform one-hot encoding
@@ -698,9 +718,7 @@ class BayesianNetworkEstimator(BaseModel):
 
             X_processed.drop(feat, axis=1, inplace=True)
 
-            column_names = [
-                f"{feat}{i if i > 0 else ''}" for i in range(len(encoded.columns))
-            ]
+            column_names = [f"{feat}{i if i > 0 else ''}" for i in range(len(encoded.columns))]
             encoded.columns = column_names
 
             # Concatenate encoded columns to original DataFrame
@@ -722,13 +740,11 @@ class BayesianNetworkEstimator(BaseModel):
 
         for feat, encoding_map in self.cat_encoding_mappings.items():
             # Perform one-hot encoding on test set using the encoding mapping
-            encoded_test = pd.DataFrame(
-                columns=encoding_map.values(), index=X_test_processed.index
-            )
+            encoded_test = pd.DataFrame(columns=encoding_map.values(), index=X_test_processed.index)
             for original_value, encoded_column in encoding_map.items():
-                encoded_test[encoded_column] = (
-                    X_test_processed[feat] == original_value
-                ).astype(int)
+                encoded_test[encoded_column] = (X_test_processed[feat] == original_value).astype(
+                    int
+                )
 
             # Add missing columns in test set based on encoding mapping
             encoded_columns_set = set(encoded_test.columns)
@@ -739,9 +755,7 @@ class BayesianNetworkEstimator(BaseModel):
             # Reorder columns to match the train set
             encoded_test = encoded_test[list(encoding_map.values())]
             # Rename columns to match the train set
-            column_names = [
-                f"{feat}{i if i > 0 else ''}" for i in range(len(encoded_test.columns))
-            ]
+            column_names = [f"{feat}{i if i > 0 else ''}" for i in range(len(encoded_test.columns))]
             encoded_test.columns = column_names
 
             # Concatenate encoded columns to original DataFrame

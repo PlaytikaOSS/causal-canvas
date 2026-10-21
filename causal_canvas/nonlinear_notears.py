@@ -1,16 +1,41 @@
+"""
+Non-linear NOTEARS — high-level API.
+
+Public entry points ``from_numpy`` and ``from_pandas`` wrap the
+low-level :class:`causal_canvas.custom_notears_mlp.NotearsMLP` solver
+and return a :class:`causal_canvas.vendored.structure_model.StructureModel` plus the trained
+MLP, ready for inspection or downstream Bayesian-network fitting.
+
+**Layer**: high-level DataFrame / NumPy API. Use this from
+``StructureLearner`` and any external consumer who wants to run
+non-linear causal discovery. Do **not** instantiate ``NotearsMLP``
+directly from here — go through ``from_pandas``.
+
+**Not to be confused with** :mod:`causal_canvas.vendored.notears_linear` (the
+*linear* NOTEARS), which is what :class:`StructureLearner` uses when
+``connections_type="linear"``.
+
+See also
+--------
+:mod:`causal_canvas.custom_notears_mlp` — the solver this wraps.
+:mod:`causal_canvas.structure_learner` — primary caller
+    (``StructureLearner._learn_non_linear_mlp_structure``).
+"""
+
 import logging
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import Dict, Iterable, List, Tuple, Union
+from typing import Optional, Union, cast
 
 import numpy as np
 import pandas as pd
-from causalnex.structure.pytorch.dist_type import DistTypeContinuous
-from causalnex.structure.structuremodel import StructureModel
 from sklearn.utils import check_array
 
 from causal_canvas.custom_distributions import dist_type_aliases
+from causal_canvas.vendored.dist_type import DistTypeContinuous
+from causal_canvas.vendored.structure_model import StructureModel
 
-# from causalnex.structure.pytorch.core import NotearsMLP
+# (formerly: from causalnex.structure.pytorch.core import NotearsMLP)
 from .custom_notears_mlp import NotearsMLP
 
 __all__ = ["from_numpy", "from_pandas"]
@@ -20,21 +45,21 @@ __all__ = ["from_numpy", "from_pandas"]
 # pylint: disable=too-many-arguments
 def from_numpy(
     X: np.ndarray,
-    dist_type_schema: Dict[int, str] = None,
+    dist_type_schema: Optional[dict[int, str]] = None,
     lasso_beta: float = 0.0,
     ridge_beta: float = 0.0,
     use_bias: bool = False,
-    hidden_layer_units: Iterable[int] = None,
-    w_threshold: float = None,
+    hidden_layer_units: Optional[Sequence[int]] = None,
+    w_threshold: Optional[float] = None,
     max_iter: int = 100,
     h_tol: float = 1e-8,
     verbose: bool = True,
-    tabu_edges: List[Tuple[int, int]] = None,
-    tabu_parent_nodes: List[int] = None,
-    tabu_child_nodes: List[int] = None,
+    tabu_edges: Optional[list[tuple[int, int]]] = None,
+    tabu_parent_nodes: Optional[list[int]] = None,
+    tabu_child_nodes: Optional[list[int]] = None,
     use_gpu: bool = True,
     **kwargs,
-) -> Tuple[StructureModel, NotearsMLP]:
+) -> tuple[StructureModel, NotearsMLP]:
     """
     Learn the `StructureModel`, the graph structure with lasso regularisation
     describing conditional dependencies between variables in data presented as a numpy array.
@@ -105,9 +130,7 @@ def from_numpy(
     dist_types = (
         [DistTypeContinuous(idx=idx) for idx in np.arange(X.shape[1])]
         if dist_type_schema is None
-        else [
-            dist_type_aliases[alias](idx=idx) for idx, alias in dist_type_schema.items()
-        ]
+        else [dist_type_aliases[alias](idx=idx) for idx, alias in dist_type_schema.items()]
     )
 
     # shape of X before preprocessing
@@ -123,16 +146,16 @@ def from_numpy(
     _, d = X.shape
 
     # if None or empty, convert into a list with single item
-    if hidden_layer_units is None:
-        hidden_layer_units = [0]
-    elif isinstance(hidden_layer_units, list) and not hidden_layer_units:
+    if hidden_layer_units is None or not hidden_layer_units:
         hidden_layer_units = [0]
 
     # if no hidden layer units, still take 1 iteration step with bounds
     hidden_layer_bnds = hidden_layer_units[0] if hidden_layer_units[0] else 1
 
-    # Flip i and j because Pytorch flattens the vector in another direction
-    bnds = [
+    # Flip i and j because Pytorch flattens the vector in another direction.
+    # scipy.optimize uses (None, None) to mean "unbounded" - hence the
+    # widened Optional[int] element type.
+    bnds: list[tuple[Optional[int], Optional[int]]] = [
         (0, 0)
         if i == j
         else (0, 0)
@@ -159,6 +182,11 @@ def from_numpy(
         **kwargs,
     )
     model.fit(X, max_iter=max_iter)
+    if model.adj is None or model.adj_mean_effect is None:
+        raise RuntimeError(
+            "NotearsMLP.fit() completed but adj / adj_mean_effect were not "
+            "populated; this indicates an internal error in the solver"
+        )
     sm = StructureModel(model.adj_mean_effect)
 
     if w_threshold:
@@ -203,21 +231,21 @@ def from_numpy(
 # pylint: disable=too-many-arguments
 def from_pandas(
     X: pd.DataFrame,
-    dist_type_schema: Dict[Union[str, int], str] = None,
+    dist_type_schema: Optional[dict[Union[str, int], str]] = None,
     lasso_beta: float = 0.0,
     ridge_beta: float = 0.0,
     use_bias: bool = False,
-    hidden_layer_units: Iterable[int] = None,
+    hidden_layer_units: Optional[Sequence[int]] = None,
     max_iter: int = 100,
     h_tol: float = 1e-8,
-    w_threshold: float = None,
-    tabu_edges: List[Tuple[str, str]] = None,
-    tabu_parent_nodes: List[str] = None,
-    tabu_child_nodes: List[str] = None,
+    w_threshold: Optional[float] = None,
+    tabu_edges: Optional[list[tuple[str, str]]] = None,
+    tabu_parent_nodes: Optional[list[str]] = None,
+    tabu_child_nodes: Optional[list[str]] = None,
     use_gpu: bool = True,
     verbose: bool = True,
     **kwargs,
-) -> Tuple[StructureModel, NotearsMLP]:
+) -> tuple[StructureModel, NotearsMLP]:
     """
     Learn the `StructureModel`, the graph structure describing conditional dependencies between variables
     in data presented as a pandas dataframe.
@@ -280,11 +308,14 @@ def from_pandas(
 
     data = deepcopy(X)
 
-    # if dist_type_schema is not None, convert dist_type_schema from cols to idx
-    dist_type_schema = (
-        dist_type_schema
+    # if dist_type_schema is not None, convert dist_type_schema from cols to idx.
+    # Cast get_loc result to int - for simple (non-duplicate) columns it's
+    # always int, but the generic return type is int | slice | ndarray so mypy
+    # needs the cast.
+    dist_type_schema_idx: Optional[dict[int, str]] = (
+        None
         if dist_type_schema is None
-        else {X.columns.get_loc(col): alias for col, alias in dist_type_schema.items()}
+        else {cast(int, X.columns.get_loc(col)): alias for col, alias in dist_type_schema.items()}
     )
     non_numeric_cols = data.select_dtypes(exclude="number").columns
 
@@ -297,25 +328,28 @@ def from_pandas(
     col_idx = {c: i for i, c in enumerate(data.columns)}
     idx_col = {i: c for c, i in col_idx.items()}
 
-    if tabu_edges:
-        tabu_edges = [(col_idx[u], col_idx[v]) for u, v in tabu_edges]
-    if tabu_parent_nodes:
-        tabu_parent_nodes = [col_idx[n] for n in tabu_parent_nodes]
-    if tabu_child_nodes:
-        tabu_child_nodes = [col_idx[n] for n in tabu_child_nodes]
+    tabu_edges_idx: Optional[list[tuple[int, int]]] = (
+        [(col_idx[u], col_idx[v]) for u, v in tabu_edges] if tabu_edges else None
+    )
+    tabu_parent_nodes_idx: Optional[list[int]] = (
+        [col_idx[n] for n in tabu_parent_nodes] if tabu_parent_nodes else None
+    )
+    tabu_child_nodes_idx: Optional[list[int]] = (
+        [col_idx[n] for n in tabu_child_nodes] if tabu_child_nodes else None
+    )
 
     g, m = from_numpy(
         X=data.values,
-        dist_type_schema=dist_type_schema,
+        dist_type_schema=dist_type_schema_idx,
         lasso_beta=lasso_beta,
         ridge_beta=ridge_beta,
         use_bias=use_bias,
         hidden_layer_units=hidden_layer_units,
         w_threshold=w_threshold,
         max_iter=max_iter,
-        tabu_edges=tabu_edges,
-        tabu_parent_nodes=tabu_parent_nodes,
-        tabu_child_nodes=tabu_child_nodes,
+        tabu_edges=tabu_edges_idx,
+        tabu_parent_nodes=tabu_parent_nodes_idx,
+        tabu_child_nodes=tabu_child_nodes_idx,
         use_gpu=use_gpu,
         h_tol=h_tol,
         verbose=verbose,
