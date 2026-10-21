@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-10-21
+
+Packaging release for the public repository and PyPI; no library code changes.
+
+### Added
+
+- `tools/sanitize_for_oss.py` — exports a tag as a sanitised tree for the public repository (internal CI files, headers and PR references removed; PyPI metadata added). Not part of the exported tree.
+
+### Changed
+
+- Public package metadata: MIT licence, classifiers, keywords and project URLs; README links made absolute so they resolve on PyPI.
+
 ## [0.2.0] — 2026-10-21
 
 Breaking release — see [ADR-0001](docs/adr/0001-causalnex-migration.md).
